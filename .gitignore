@@ -1,2 +1,5 @@
 # Do not add built binaries
 dist-newstyle
+
+# Do not add supplemental items used to write the README
+readme/*

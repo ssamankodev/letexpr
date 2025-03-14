@@ -116,7 +116,6 @@ module Main where
             --  The function 'getFirst' returns the value of the Left untouched or it gets the head of the non empty list of the Right.
             --
             let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
-            T.putStrLn Data.Text.empty
             mapM_ T.putStr $ uncurry betaReduceContainer containerized
             T.putStrLn Data.Text.empty
         Right value -> case validateRecursionLetBindingTypesNew . mapLetBindingsLeft (validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) $ mapLetBindings inverseDistributeEither value of
@@ -127,13 +126,11 @@ module Main where
           Right validLetExpr -> do
             let simplifiedFinalExprValidLetExpr = bimap (first fst) toContainerIntText validLetExpr
             let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
-            T.putStrLn Data.Text.empty
             mapM_ T.putStr $ uncurry betaReduceContainer containerized
             T.putStrLn Data.Text.empty
       Nothing -> case mutualReferenceLetExprParse vExprs of
         Just validSyntax -> case mutualUnfoldIndexValuesTrie validSyntax of
           Left value -> do
-            T.putStrLn Data.Text.empty
             T.putStrLn "[Error]: Input rebinds at least one mutually referential variable, which is invalid."
             T.putStrLn ""
             traverse_ (mapM_ T.putStrLn) . invalidRebindMessage $ fmap (fmap (fmap snd)) value
@@ -145,7 +142,6 @@ module Main where
             Right validLetExpr -> do
               let simplifiedFinalExprValidLetExpr = bimap (first fst) toContainerIntText validLetExpr
               let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
-              T.putStrLn Data.Text.empty
               mapM_ T.putStr $ uncurry betaReduceContainer containerized
               T.putStrLn Data.Text.empty
         Nothing -> do
@@ -162,7 +158,6 @@ module Main where
           --the third fmap is for the NonEmpty list.
           let modifyListLetBinding = fmap . fmap . fmap
 
-          T.putStrLn Data.Text.empty
           T.putStrLn "[Error]: Input rebinds at least one mutually referential variable, which is invalid."
           T.putStrLn ""
           traverse_ (mapM_ T.putStrLn) . invalidRebindMessage . modifyListLetBinding snd $ getRebinds finalTrie
@@ -174,13 +169,11 @@ module Main where
           Right validLetExpr -> do
             let simplifiedFinalExprValidLetExpr = bimap (first fst) toContainerIntText validLetExpr
             let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
-            T.putStrLn Data.Text.empty
             mapM_ T.putStr $ uncurry betaReduceContainer containerized
             T.putStrLn Data.Text.empty
       Nothing -> case mutualReferenceLetExprParse vExprs of
         Just validSyntax -> case mutualUnfoldIndexValuesTrie validSyntax of
           Left value -> do
-            T.putStrLn Data.Text.empty
             T.putStrLn "[Error]: Input rebinds at least one mutually referential variable, which is invalid."
             T.putStrLn ""
             traverse_ (mapM_ T.putStrLn) . invalidRebindMessage $ fmap (fmap (fmap snd)) value
@@ -192,7 +185,6 @@ module Main where
             Right validLetExpr -> do
               let simplifiedFinalExprValidLetExpr = bimap (first fst) toContainerIntText validLetExpr
               let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
-              T.putStrLn Data.Text.empty
               mapM_ T.putStr $ uncurry betaReduceContainer containerized
               T.putStrLn Data.Text.empty
         Nothing -> do
