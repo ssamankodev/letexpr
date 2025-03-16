@@ -12,19 +12,19 @@ letexpr defines three different types of let bindings that bind a variable to a 
 
 The first is a normal let binding that allows a body to contain references to other let bindings.
 
-> let <variable> = <body>
+> let \<variable\> = \<body\>
 
 ### Raw
 
 The second is a let binding that, by fiat, does not contain references to any other let binding.
 
-> let raw <variable> = <body>
+> let raw \<variable\> = \<body\>
 
 ### Recursive
 
 The third is a let binding that contains a reference to itself.
 
-> let rec <variable> = <body>
+> let rec \<variable\> = \<body\>
 
 ## Let expression
 
