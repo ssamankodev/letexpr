@@ -39,7 +39,7 @@ let expression = let <let binding> in <let expression> | let <let binding> in <f
 let binding = <var> = <body> | raw <var> = <body> | rec <var> = <body>
 ```
 
-Each let expression separates the let binding from the final expression with the token “in”.
+Each let expression separates the let binding from the final expression with the token "in".
 
 ### Mutually recursive let bindings
 
@@ -58,29 +58,29 @@ let binding = <var> = <body> | raw <var> = <body> | rec <var> = <body>
 > letexpr let x = 1x in x
 ```
 ```
-# This outputs an infinite stream of “12”s
+# This outputs an infinite stream of 12s.
 
 > letexpr let x = 1y , y = 2x in x
 ```
 ```
-# This prints “echo hello”
+# This prints "echo hello"
 
 > letexpr let binding = “echo hello” in binding
 ```
 ```
-# This prints “hello” as the subshell executes the letexpr command, which prints “echo hello” and that in turn is interpreted by the current shell, which runs the “echo” command on the input “hello” and prints “hello”.
+# This prints "hello" as the subshell executes the letexpr command, which prints "echo hello" and that in turn is interpreted by the current shell, which runs the "echo" command on the input "hello" and prints "hello".
 
-> $(letexpr let binding = “echo hello” in binding)
+> $(letexpr let binding = "echo hello" in binding)
 ```
 ```
 # This changes the current directory to /path/to/project
 
-> cd $(letexpr let raw x = “/path/to/project” in let raw y = “/path/to/other/project” in x)
+> cd $(letexpr let raw x = "/path/to/project" in let raw y = "/path/to/other/project" in x)
 ```
 ```
-# This prints the result of replacing all instances of the string literal “pattern” with the string literal “PATTERN” in the output of “cat /some/text/file”
+# This prints the result of replacing all instances of the string literal "pattern" with the string literal "PATTERN" in the output of "cat /some/text/file"
 
-> cat /some/text/file | letexpr let pattern = “PATTERN” in
+> cat /some/text/file | letexpr let pattern = "PATTERN" in
 ```
 
 ## Potential use cases
