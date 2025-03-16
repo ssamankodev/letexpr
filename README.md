@@ -1,36 +1,36 @@
-#letexpr
+# letexpr
 
 letexpr is a program that lets you write let expressions on the command line. Given a let expression, it prints the beta-reduced let expression (i.e., with all of the variables subsituted by their values), but does not execute it.
 
 **Note: In this README, I will refer to each binding of a variable to a body as a let binding, and the combination of the let bindings and the final expression as a let expression. If any terminology is used incorrectly, please open an issue in the issue tracker.**
 
-##Let binding
+## Let binding
 
 letexpr defines three different types of let bindings that bind a variable to a body.
 
-###Normal
+### Normal
 
 The first is a normal let binding that allows a body to contain references to other let bindings.
 
-let <variable> = <body>
+> let <variable> = <body>
 
-###Raw
+### Raw
 
 The second is a let binding that, by fiat, does not contain references to any other let binding.
 
-let raw <variable> = <body>
+> let raw <variable> = <body>
 
-###Recursive
+### Recursive
 
 The third is a let binding that contains a reference to itself.
 
-let rec <variable> = <body>
+> let rec <variable> = <body>
 
-##Let expression
+## Let expression
 
 letexpr defines two different types of let expressions that contain a collection of let bindings and a final expression whose variables should be replaced by the corresponding let binding’s body.
 
-###Nested let expressions
+### Nested let expressions
 
 The first is a let expression where the final expression is either an expression or itself a let expression.
 
@@ -41,7 +41,7 @@ let binding = <var> = <body> | raw <var> = <body> | rec <var> = <body>
 
 Each let expression separates the let binding from the final expression with the token “in”.
 
-###Mutually recursive let bindings
+### Mutually recursive let bindings
 
 The second is a let binding where each let binding is in scope of all of the other let bindings, regardless of their syntactic order.
 
@@ -51,7 +51,7 @@ declarations = <let binding> , <declarations> | <let binding>
 let binding = <var> = <body> | raw <var> = <body> | rec <var> = <body>
 ```
 
-##Sample invocations
+## Sample invocations
 ```
 # This outputs an infinite stream of 1s.
 
@@ -82,12 +82,12 @@ let binding = <var> = <body> | raw <var> = <body> | rec <var> = <body>
 > cat /some/text/file | letexpr let pattern = “PATTERN” in
 ```
 
-##Potential use cases
+## Potential use cases
 - Namespace shell aliases or variables by creating a shell alias of a prepared letexpr invocation, so that they are accessible but don’t pollute the alias or variable namespace when unused.
 - Tightly scope variable declarations so that they are only available when necessary, thereby reducing the risk of incorrectly using a .
 - Generate text. As it is a let expression, it allows the construction of complex strings in a principled manner.
 
-##FAQ
+## FAQ
 - Why use this instead of my preferred shell’s native variables?
   - For most cases, it is recommended that you use your shell’s native variables. This program is meant to enable more complex or stringent use cases where the user wants to have more control about which variables are in scope for a given command and how they are constructed.
 - Why can’t I declare functions with the let bindings?
