@@ -64,6 +64,7 @@ let binding = <var> = <body> | raw <var> = <body> | rec <var> = <body>
 ```
 ```
 # This prints “echo hello”
+
 > letexpr let binding = “echo hello” in binding
 ```
 ```
