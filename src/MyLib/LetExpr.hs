@@ -9,25 +9,15 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), RecursionAllowance(..), getRebinds, mapLetBindings, mapLetBindingsLeft, validateRecursionLetBindingTypesNew, validateRecursionLetBindingTypes, letExprContainerToFinalContainer, betaReduceContainer, linearUnfoldIndexValuesTrie, mutualUnfoldIndexValuesTrie, validateLetBindingTypesContainer, getFirst, getFinalLetBindingValue, invalidRebindMessage, varT, varBS, toVar, exprTextToContainer, toContainerIntText, identifyVariablesContainer, inverseDistributeEither, flattenTuple) where
+module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), RecursionAllowance(..), getRebinds, mapLetBindings, mapLetBindingsLeft, validateRecursionLetBindingTypesNew, validateRecursionLetBindingTypes, letExprContainerToFinalContainer, betaReduceContainer, linearUnfoldIndexValuesTrie, mutualUnfoldIndexValuesTrie, validateLetBindingTypesContainer, getFirst, getFinalLetBindingValue, invalidRebindMessage, varT, varBS, toVar, exprTextToContainer, toContainerIntText, identifyVariablesContainer, inverseDistributeEither, flattenTuple, exprTextT) where
 
-  import Data.Foldable(foldl')
-  import Data.Maybe
   import Data.Text (Text())
   import qualified Data.Text as T
   import qualified Data.Text.Encoding as TE
-  import Data.Text.Lazy.Builder (Builder)
-  import qualified Data.Text.Lazy.Builder as TLB
-  import qualified Data.Text.Lazy as TL (toStrict)
-  import Data.List (sortBy, unfoldr, find)
   import Data.List.NonEmpty (NonEmpty(..), (<|))
   import qualified Data.List.NonEmpty as NE
-  import Data.Sequence (Seq(..))
-  import qualified Data.Sequence as Seq
-  import Data.Maybe
   import Data.Kind (Type)
   import Data.Bifunctor
-  import Data.Ord
   import Data.Trie (Trie)
   import qualified Data.Trie as Trie
   import Data.ByteString (ByteString)
@@ -40,44 +30,45 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     deriving (Eq, Show, Ord) via ByteString
 
   data LetBinding (dataType :: Type) = LetBinding Var dataType
-    deriving (Functor, Show)
+    deriving (Eq, Functor, Show)
 
   data RecursionAllowance = Permit | Prohibit
+    deriving Eq
 
   --Represents text that either references a variable introduced by a let-binding or is just plain-text.
   newtype ExprText = ExprText Text
-    deriving Show
+    deriving (Eq, Show)
 
   --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
   --The Text value is the prefix of the overall expression if it is not a variable.
   data ExprRec
     = ExprRec Var Text ExprRecData
     | ExprRecNoText Var ExprRecData
-    deriving Show
+    deriving (Eq, Show)
 
   data ExprRecData
     = ExprRecData Text ExprRecData   --Represents a recursive variable followed by a Text value
     | ExprRecDataNoText ExprRecData  --Represents a recursive variable not followed by a Text value
     | ExprRecDataFinal Text          --Represents a final recursive variable followed by a final Text value
     | ExprRecDataFinalNoText         --Represents a final recursive variable not followed by a final Text value
-    deriving Show
+    deriving (Eq, Show)
 
   data ExprRef
     = ExprRef Text ExprRefData
     | ExprRefNoText ExprRefData
-    deriving Show
+    deriving (Eq, Show)
 
   data ExprRefData
     = ExprRefData Var Text ExprRefData
     | ExprRefDataNoText Var ExprRefData
     | ExprRefDataFinal Var Text
     | ExprRefDataFinalNoText Var
-    deriving Show
+    deriving (Eq, Show)
 
   data ExprRefRec
     = ExprRefRec Var Text ExprRefRecData
     | ExprRefRecNoText Var ExprRefRecData
-    deriving Show
+    deriving (Eq, Show)
 
   data ExprRefRecData
     = ExprRefRecRefData Var Text ExprRefRecData
@@ -88,20 +79,20 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     | ExprRefRecRefDataSwitchNoText Var ExprRecData
     | ExprRefRecRecDataSwitch Text ExprRefData
     | ExprRefRecRecDataSwitchNoText ExprRefData
-    deriving Show
+    deriving (Eq, Show)
 
   data LetBindingTypes
     = LetBindingNonVar ExprText
     | LetBindingRec ExprRec
     | LetBindingRef ExprRef
     | LetBindingRefRec ExprRefRec
-    deriving Show
+    deriving (Eq, Show)
 
   data Container a b
     = Container b (ContainerData a b)
     | ContainerNoInitial (ContainerData a b)
     | ContainerSingle b
-    deriving Functor
+    deriving (Eq, Functor)
 
   instance Bifunctor Container where
     bimap f g (Container b rest) = Container (g b) $ bimap f g rest
@@ -113,7 +104,7 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     | ContainerDataNoExtra a (ContainerData a b)
     | ContainerDataFinal a b
     | ContainerDataFinalNoExtra a
-    deriving Functor
+    deriving (Eq, Functor)
 
   instance Bifunctor ContainerData where
     bimap f g (ContainerData a b rest) = ContainerData (f a) (g b) $ bimap f g rest
@@ -124,7 +115,7 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
   data LetExpr dataType finalExpr
     = LetBind (LetBinding dataType) (LetExpr dataType finalExpr)
     | LetBindFinal (LetBinding dataType) finalExpr
-    deriving (Functor, Show)
+    deriving (Eq, Functor, Show)
 
   instance Bifunctor LetExpr where
     bimap f g (LetBind (LetBinding var expr) rest) = LetBind (LetBinding var $ f expr) $ bimap f g rest
@@ -134,6 +125,7 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     = Valid a
     | ValidInexact a
     | Invalid a
+    deriving Eq
 
   --------------------
 
