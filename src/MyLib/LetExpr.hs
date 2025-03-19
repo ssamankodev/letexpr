@@ -27,48 +27,48 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
 
   --Is a newtype for Text that represents a variable name
   newtype Var = Var ByteString
-    deriving (Eq, Show, Ord) via ByteString
+    deriving (Eq, Ord) via ByteString
 
   data LetBinding (dataType :: Type) = LetBinding Var dataType
-    deriving (Eq, Functor, Show)
+    deriving (Eq, Functor)
 
   data RecursionAllowance = Permit | Prohibit
     deriving Eq
 
   --Represents text that either references a variable introduced by a let-binding or is just plain-text.
   newtype ExprText = ExprText Text
-    deriving (Eq, Show)
+    deriving (Eq)
 
   --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
   --The Text value is the prefix of the overall expression if it is not a variable.
   data ExprRec
     = ExprRec Var Text ExprRecData
     | ExprRecNoText Var ExprRecData
-    deriving (Eq, Show)
+    deriving (Eq)
 
   data ExprRecData
     = ExprRecData Text ExprRecData   --Represents a recursive variable followed by a Text value
     | ExprRecDataNoText ExprRecData  --Represents a recursive variable not followed by a Text value
     | ExprRecDataFinal Text          --Represents a final recursive variable followed by a final Text value
     | ExprRecDataFinalNoText         --Represents a final recursive variable not followed by a final Text value
-    deriving (Eq, Show)
+    deriving (Eq)
 
   data ExprRef
     = ExprRef Text ExprRefData
     | ExprRefNoText ExprRefData
-    deriving (Eq, Show)
+    deriving (Eq)
 
   data ExprRefData
     = ExprRefData Var Text ExprRefData
     | ExprRefDataNoText Var ExprRefData
     | ExprRefDataFinal Var Text
     | ExprRefDataFinalNoText Var
-    deriving (Eq, Show)
+    deriving (Eq)
 
   data ExprRefRec
     = ExprRefRec Var Text ExprRefRecData
     | ExprRefRecNoText Var ExprRefRecData
-    deriving (Eq, Show)
+    deriving (Eq)
 
   data ExprRefRecData
     = ExprRefRecRefData Var Text ExprRefRecData
@@ -79,14 +79,14 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     | ExprRefRecRefDataSwitchNoText Var ExprRecData
     | ExprRefRecRecDataSwitch Text ExprRefData
     | ExprRefRecRecDataSwitchNoText ExprRefData
-    deriving (Eq, Show)
+    deriving (Eq)
 
   data LetBindingTypes
     = LetBindingNonVar ExprText
     | LetBindingRec ExprRec
     | LetBindingRef ExprRef
     | LetBindingRefRec ExprRefRec
-    deriving (Eq, Show)
+    deriving (Eq)
 
   data Container a b
     = Container b (ContainerData a b)
@@ -115,7 +115,7 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
   data LetExpr dataType finalExpr
     = LetBind (LetBinding dataType) (LetExpr dataType finalExpr)
     | LetBindFinal (LetBinding dataType) finalExpr
-    deriving (Eq, Functor, Show)
+    deriving (Eq, Functor)
 
   instance Bifunctor LetExpr where
     bimap f g (LetBind (LetBinding var expr) rest) = LetBind (LetBinding var $ f expr) $ bimap f g rest

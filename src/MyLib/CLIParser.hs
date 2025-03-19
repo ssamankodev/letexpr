@@ -3,7 +3,7 @@
 
 module MyLib.CLIParser (CLIParserBundle, cliParserBundle, parserResult, Switches(..), CLI(..), SwitchRebind(..)) where
 
-  import Prelude (undefined, Show(..), (++))
+  import Prelude (undefined, (++))
   import System.IO (IO, getContents, getContents', hGetLine, stdin)
   import System.Environment (getArgs)
   import Data.Text (Text)
@@ -36,13 +36,11 @@ module MyLib.CLIParser (CLIParserBundle, cliParserBundle, parserResult, Switches
     { switches :: Switches
     , expressions :: [Text]
     }
-    deriving Show
 
   {-
   Newtype for Bool for user's input choice of enabling rebindable let-bindings.
   -}
   newtype SwitchRebind = SwitchRebind Bool
-    deriving Show
 
   {-
   Data type that holds user's input choice of switches in regards to rebinding.
@@ -51,7 +49,6 @@ module MyLib.CLIParser (CLIParserBundle, cliParserBundle, parserResult, Switches
     {
       rebind :: SwitchRebind
     }
-    deriving Show
 
   -- -------------------
   -- | CLIParserBundle |
