@@ -89,11 +89,11 @@ let binding = <var> = <body> | raw <var> = <body> | rec <var> = <body>
 - Generate text. As it is a let expression, it allows the construction of complex strings in a principled manner.
 
 ## FAQ
-- Why use this instead of my preferred shell’s native variables?
+- **Why use this instead of my preferred shell’s native variables?**
   - For most cases, it is recommended that you use your shell’s native variables. This program is meant to enable more complex or stringent use cases where the user wants to have more control about which variables are in scope for a given command and how they are constructed.
-- Why can’t I declare functions with the let bindings?
+- **Why can’t I declare functions with the let bindings?**
   - Currently, letexpr assumes that all let bindings are a binding of a variable to a singular value, and as such, it does not have a notion of function application syntactically or semantically. This may be revisted, but for now, letexpr will operate under this assumption.
-- Why are variables identified by matching without considering surrounding context instead of only matching on words/tokens?
+- **Why are variables identified by matching without considering surrounding context instead of only matching on words/tokens?**
   - letexpr is expected to interoperate with external tools and the shell (e.g., the final expression being the output of a piped command), which means being able to work with input as is without modifying it to demarcate variables. As such, it is assumed that all matching text is meant to be substituted.
-- Why not add the ability to execute the beta-reduced expression?
+- **Why not add the ability to execute the beta-reduced expression?**
   - Primarily, this can be already be done by wrapping the letexpr invocation in a subshell. This orthogonality and separation of concerns allows letexpr to focus solely on beta reduction. Additionally, having a program like letexpr that rewrites the user’s input also execute commands requires giving said program a certain level of trust; by reducing its capabilities to printing a string, its output can be inspected and used as desired.
