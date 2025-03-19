@@ -32,29 +32,29 @@ letexpr defines two different types of let expressions that contain a collection
 
 ### Nested let expressions
 
-The first is a let expression where the final expression is either an expression or itself a let expression. In the following grammar, 'valid UTF8' is any valid UTF8 string.
+The first is a let expression where the final expression is either an expression or itself a let expression. In the following grammar, 'valid UTF-8' is any valid UTF-8 string.
 
 ```
 let expression = let <let binding> in <let expression> | let <let binding> in <final expression>
 let binding = <var> = <body> | raw <var> = <body> | rec <var> = <body>
-var = <valid UTF8>
-body = <valid UTF8>
-final expression = <valid UTF8>
+var = <valid UTF-8>
+body = <valid UTF-8>
+final expression = <valid UTF-8>
 ```
 
 Each let expression separates the let binding from the final expression with the token "in".
 
 ### Mutually recursive let bindings
 
-The second is a let binding where each let binding is in scope of all of the other let bindings, regardless of their syntactic order. In the following grammar, 'valid UTF8' is any valid UTF8 string.
+The second is a let binding where each let binding is in scope of all of the other let bindings, regardless of their syntactic order. In the following grammar, 'valid UTF-8' is any valid UTF-8 string.
 
 ```
 let expression = let <declarations> in <final expression>
 declarations = <let binding> , <declarations> | <let binding>
 let binding = <var> = <body> | raw <var> = <body> | rec <var> = <body>
-var = <valid UTF8>
-body = <valid UTF8>
-final expression = <valid UTF8>
+var = <valid UTF-8>
+body = <valid UTF-8>
+final expression = <valid UTF-8>
 ```
 
 ## Sample invocations
