@@ -64,7 +64,8 @@ module Main where
         Left value -> case validateRecursionLetBindingTypesNew . mapLetBindingsLeft (validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) $ mapLetBindings inverseDistributeEither value of
           Left invalidRecursions -> do
             T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
-            print invalidRecursions
+            --TODO: Implement printing of invalid recursive LetBindingTypes
+            --print invalidRecursions
             T.putStrLn Data.Text.empty
           Right validLetExpr -> do
             let simplifiedFinalExprValidLetExpr = bimap (first (fst . getFirst)) (toContainerIntText . first (second (first getFirst))) validLetExpr
