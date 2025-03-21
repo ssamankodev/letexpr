@@ -5,7 +5,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), RecursionAllowance(..), getRebinds, mapLetBindings, mapLetBindingsLeft, validateRecursionLetBindingTypesNew, validateRecursionLetBindingTypes, letExprContainerToFinalContainer, betaReduceContainer, linearUnfoldIndexValuesTrie, mutualUnfoldIndexValuesTrie, validateLetBindingTypesContainer, getFirst, getFinalLetBindingValue, invalidRebindMessage, varT, varBS, toVar, exprTextToContainer, toContainerIntText, identifyVariablesContainer, inverseDistributeEither, flattenTuple, exprTextT) where
+module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), RecursionAllowance(..), getRebinds, firstLetBindings, mapLetBindingsLeft, mapLetExprEitherLeft, validateRecursionLetBindingTypesNew, validateRecursionLetBindingTypes, letExprContainerToFinalContainer, betaReduceContainer, linearUnfoldIndexValuesTrie, mutualUnfoldIndexValuesTrie, validateLetBindingTypesContainer, getFirst, getFinalLetBindingValue, invalidRebindMessage, varT, varBS, toVar, exprTextToContainer, toContainerIntText, identifyVariablesContainer, inverseDistributeEither, flattenTuple, exprTextT) where
 
   import Data.Text (Text())
   import qualified Data.Text as T
@@ -154,29 +154,59 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     -> ByteString
   varBS (Var name) = name
 
+  embedLetBinding
+    :: LetBinding a
+    -> LetBinding (LetBinding a)
+  embedLetBinding lb@(LetBinding var expr) = LetBinding var lb
+
+  mapLetBinding
+    :: (LetBinding a -> b)
+    -> LetBinding a
+    -> LetBinding b
+  mapLetBinding fn = fmap fn . embedLetBinding
+
   bimapLetBindings
     :: (LetBinding a -> c)
     -> (b -> d)
     -> LetExpr a b
     -> LetExpr c d
-  bimapLetBindings fnLB fnFE (LetBind lb@(LetBinding var _) next) = LetBind (LetBinding var $ fnLB lb) $ bimapLetBindings fnLB fnFE next
-  bimapLetBindings fnLB fnFE (LetBindFinal lb@(LetBinding var _) finalExpression) = LetBindFinal (LetBinding var $ fnLB lb) $ fnFE finalExpression
+  bimapLetBindings fnLB fnFE (LetBind lb next) = LetBind (mapLetBinding fnLB lb) $ bimapLetBindings fnLB fnFE next
+  bimapLetBindings fnLB fnFE (LetBindFinal lb finalExpression) = LetBindFinal (mapLetBinding fnLB lb) $ fnFE finalExpression
 
-  mapLetBindings
-    :: (LetBinding a -> LetBinding c)
+  firstLetBindings
+    :: (LetBinding a -> c)
     -> LetExpr a b
     -> LetExpr c b
-  mapLetBindings fn (LetBind lb rest) = LetBind (fn lb) $ mapLetBindings fn rest
-  mapLetBindings fn (LetBindFinal lb finalExpr) = LetBindFinal (fn lb) finalExpr
+  firstLetBindings fn = bimapLetBindings fn id
 
   mapLetBindingsLeft
-    :: (LetBinding a -> LetBinding b)
+    :: (LetBinding a -> b)
+    -> LetBinding (Either a c)
+    -> (Either b c)
+  mapLetBindingsLeft fn lb = letBindingValue . eitherToLetBinding . first (fmap fn . embedLetBinding) $ letBindingToEither lb
+
+  mapLetExprEitherLeft
+    :: (LetBinding a -> b)
     -> LetExpr (Either a c) d
     -> LetExpr (Either b c) d
-  mapLetBindingsLeft fn (LetBind (LetBinding var (Left value)) rest) = LetBind (fmap Left (fn (LetBinding var value))) $ mapLetBindingsLeft fn rest
-  mapLetBindingsLeft fn (LetBind (LetBinding var (Right value)) rest) = LetBind (LetBinding var (Right value)) $ mapLetBindingsLeft fn rest
-  mapLetBindingsLeft fn (LetBindFinal (LetBinding var (Left value)) finalExpr) = LetBindFinal (fmap Left (fn (LetBinding var value))) $ finalExpr
-  mapLetBindingsLeft _ (LetBindFinal (LetBinding var (Right value)) finalExpr) = LetBindFinal (LetBinding var (Right value)) finalExpr
+  mapLetExprEitherLeft fn = firstLetBindings (mapLetBindingsLeft fn)
+
+  letBindingValue
+    :: LetBinding a
+    -> a
+  letBindingValue (LetBinding _ a) = a
+
+  letBindingToEither
+    :: LetBinding (Either a b)
+    -> Either (LetBinding a) (LetBinding b)
+  letBindingToEither (LetBinding var (Left value)) = Left $ LetBinding var value
+  letBindingToEither (LetBinding var (Right value)) = Right $ LetBinding var value
+
+  eitherToLetBinding
+    :: Either (LetBinding a) (LetBinding b)
+    -> LetBinding (Either a b)
+  eitherToLetBinding (Left (LetBinding var value)) = LetBinding var $ Left value
+  eitherToLetBinding (Right (LetBinding var value)) = LetBinding var $ Right value
 
   foldlLetExpr
     :: (b -> LetBinding a -> b)
@@ -377,15 +407,15 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
 
   identifyVariablesContainer
     :: LetBinding (RecursionAllowance, ExprText, Trie a)
-    -> LetBinding (RecursionAllowance, LetBindingTypes, Container a Text, Trie a)
-  identifyVariablesContainer (LetBinding var (recAll, ExprText expr, trie)) = LetBinding var $ case identifyVariablesInTextContainer expr trie of
+    -> (RecursionAllowance, LetBindingTypes, Container a Text, Trie a)
+  identifyVariablesContainer (LetBinding var (recAll, ExprText expr, trie)) = case identifyVariablesInTextContainer expr trie of
     Right (ExprText text) -> (recAll, LetBindingNonVar (ExprText text), ContainerSingle text, trie)
     Left (exprRef, container) -> (recAll, exprRefToLetBindingTypes var exprRef, container, trie)
 
   validateLetBindingTypesContainer
-    :: LetBinding (RecursionAllowance, LetBindingTypes, a, b)
-    -> LetBinding (Valid LetBindingTypes, a, b)
-  validateLetBindingTypesContainer (LetBinding var (recAll, lbt, a, b)) = LetBinding var (validRecursion recAll lbt, a, b)
+    :: (RecursionAllowance, LetBindingTypes, a, b)
+    -> (Valid LetBindingTypes, a, b)
+  validateLetBindingTypesContainer (recAll, lbt, a, b) = (validRecursion recAll lbt, a, b)
 
   identifyVariablesInTextContainer
     :: Text
@@ -521,8 +551,8 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
 
       foldFn
         :: (Int, Either (Trie (Int, ExprText)) (Trie (Either (Int, ExprText) (NonEmpty (Int, ExprText)))))
-           -> LetBinding ExprText
-           -> (Int, Either (Trie (Int, ExprText)) (Trie (Either (Int, ExprText) (NonEmpty (Int, ExprText)))))
+        -> LetBinding ExprText
+        -> (Int, Either (Trie (Int, ExprText)) (Trie (Either (Int, ExprText) (NonEmpty (Int, ExprText)))))
       foldFn (index, Left singleTrie) lb@(LetBinding var expr) =
         if Trie.member (varBS var) singleTrie
         then foldFn (index, Right $ Trie.filterMap (Just . Left) singleTrie) lb
