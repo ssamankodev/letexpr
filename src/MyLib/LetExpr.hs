@@ -1,9 +1,7 @@
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE StarIsType #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE TupleSections #-}
@@ -16,7 +14,6 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
   import qualified Data.Text.Encoding as TE
   import Data.List.NonEmpty (NonEmpty(..), (<|))
   import qualified Data.List.NonEmpty as NE
-  import Data.Kind (Type)
   import Data.Bifunctor
   import Data.Trie (Trie)
   import qualified Data.Trie as Trie
@@ -30,7 +27,7 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     deriving (Eq, Ord) via ByteString
 
   --A let binding which holds a variable and datum.
-  data LetBinding (dataType :: Type) = LetBinding Var dataType
+  data LetBinding a = LetBinding Var a
     deriving (Eq, Functor)
 
   --A data type thar represents whether recursion is permitted in a given instance or not.
