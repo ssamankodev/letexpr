@@ -15,7 +15,6 @@ module MyLib.CLIParser (CLIParserBundle, cliParserBundle, parserResult, Switches
   import Data.Bool(Bool(..), not)
   import Data.Function(($), (.))
   import Data.Semigroup
-  import Data.Either
   import Control.Monad
   import HsShellScript (isatty)
 
