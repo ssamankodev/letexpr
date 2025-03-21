@@ -71,13 +71,13 @@ library
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base ^>=4.19.1.0
+    build-depends:    base ^>= 4.19.1.0
                     , text ^>= 2.1.2
-                    , optparse-applicative
+                    , optparse-applicative ^>= 0.18.1.0
                     , hsshellscript ^>= 3.6.4
-                    , bytestring
-                    , bytestring-trie
-                    , array
+                    , bytestring ^>= 0.12.0.0
+                    , bytestring-trie ^>= 0.2.7
+                    , array ^>= 0.5.0.0
 
     -- Directories containing source files.
     hs-source-dirs:   src
@@ -99,11 +99,10 @@ executable letexpr
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:
-        base ^>=4.19.1.0,
-        letexpr,
-        text ^>=2.1.2,
-        bytestring-trie
+    build-depends:   base ^>=4.19.1.0
+                   , letexpr
+                   , text ^>=2.1.2
+                   , bytestring-trie ^>= 0.2.7
 
     -- Directories containing source files.
     hs-source-dirs:   app
@@ -135,8 +134,6 @@ test-suite letexpr-test
     main-is:          Main.hs
 
     -- Test dependencies.
-    build-depends:
-        base ^>=4.19.1.0,
-        HUnit,
-        hedgehog,
-        letexpr
+    build-depends:   base ^>=4.19.1.0
+                   , hedgehog ^>= 1.5
+                   , letexpr
