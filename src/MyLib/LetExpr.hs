@@ -217,7 +217,7 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
       mapFn :: (ByteString, b) -> LetBinding b
       mapFn (bs, b) = LetBinding (Var bs) b
     in
-    fmap mapFn $ Trie.toList $ Trie.filterMap filterFn trie
+    fmap mapFn . Trie.toList $ Trie.filterMap filterFn trie
 
   exprTextToContainer
     :: ExprText
@@ -365,10 +365,10 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
   flattenTuple ((a, b), c) = (a, b, c)
 
   inverseDistributeEither
-    :: LetBinding (Either a b, c)
-    -> LetBinding (Either (a, c) (b, c))
-  inverseDistributeEither (LetBinding var (Left a, c)) = LetBinding var $ Left (a, c)
-  inverseDistributeEither (LetBinding var (Right b, c)) = LetBinding var $ Right (b, c)
+    :: (Either a b, c)
+    -> Either (a, c) (b, c)
+  inverseDistributeEither (Left a, c) = Left (a, c)
+  inverseDistributeEither (Right b, c) = Right (b, c)
 
   identifyVariablesContainer
     :: LetBinding (RecursionAllowance, ExprText, Trie a)
