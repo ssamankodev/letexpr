@@ -149,6 +149,14 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     -> ByteString
   varBS (Var name) = name
 
+  bimapLetBindings
+    :: (LetBinding a -> c)
+    -> (b -> d)
+    -> LetExpr a b
+    -> LetExpr c d
+  bimapLetBindings fnLB fnFE (LetBind lb@(LetBinding var _) next) = LetBind (LetBinding var $ fnLB lb) $ bimapLetBindings fnLB fnFE next
+  bimapLetBindings fnLB fnFE (LetBindFinal lb@(LetBinding var _) finalExpression) = LetBindFinal (LetBinding var $ fnLB lb) $ fnFE finalExpression
+
   mapLetBindings
     :: (LetBinding a -> LetBinding c)
     -> LetExpr a b
@@ -164,6 +172,24 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
   mapLetBindingsLeft fn (LetBind (LetBinding var (Right value)) rest) = LetBind (LetBinding var (Right value)) $ mapLetBindingsLeft fn rest
   mapLetBindingsLeft fn (LetBindFinal (LetBinding var (Left value)) finalExpr) = LetBindFinal (fmap Left (fn (LetBinding var value))) $ finalExpr
   mapLetBindingsLeft _ (LetBindFinal (LetBinding var (Right value)) finalExpr) = LetBindFinal (LetBinding var (Right value)) finalExpr
+
+  foldlLetExpr
+    :: (b -> LetBinding a -> b)
+    -> b
+    -> LetExpr a c
+    -> b
+  foldlLetExpr fn accum (LetBind lb rest) = foldlLetExpr fn (fn accum lb) rest
+  foldlLetExpr fn accum (LetBindFinal lb _) = fn accum lb
+
+  getFirst
+    :: Either a (NonEmpty a)
+    -> a
+  getFirst (Left a) = a
+  getFirst (Right (a :| _)) = a
+
+  getFinalLetBindingValue :: LetExpr a b -> a
+  getFinalLetBindingValue (LetBind _ rest) = getFinalLetBindingValue rest
+  getFinalLetBindingValue (LetBindFinal (LetBinding _ value) _) = value
 
   ------------------
 
@@ -192,14 +218,6 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
       mapFn (bs, b) = LetBinding (Var bs) b
     in
     fmap mapFn $ Trie.toList $ Trie.filterMap filterFn trie
-
-  foldlLetExpr
-    :: (b -> LetBinding a -> b)
-    -> b
-    -> LetExpr a c
-    -> b
-  foldlLetExpr fn accum (LetBind lb rest) = foldlLetExpr fn (fn accum lb) rest
-  foldlLetExpr fn accum (LetBindFinal lb _) = fn accum lb
 
   exprTextToContainer
     :: ExprText
@@ -518,20 +536,6 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     case snd . foldlLetExpr foldFn (0, Left Trie.empty) $ first getEitherValue letExpr of
       Left singleTrie -> Right $ bimap (, singleTrie) (flip identifyVariablesInTextContainer singleTrie . exprTextT) letExpr
       Right multiTrie -> Left $ getRebinds multiTrie
-
-  --------------------
-
-  getFirst
-    :: Either a (NonEmpty a)
-    -> a
-  getFirst (Left a) = a
-  getFirst (Right (a :| _)) = a
-
-  --------------------
-
-  getFinalLetBindingValue :: LetExpr a b -> a
-  getFinalLetBindingValue (LetBind _ rest) = getFinalLetBindingValue rest
-  getFinalLetBindingValue (LetBindFinal (LetBinding _ value) _) = value
 
  ----------------------------------------------------
 

@@ -1,39 +1,10 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module MyLib.CLIToLetExpr(linearReferenceLetExprParse, mutualReferenceLetExprParse) where
 
-  import Prelude (undefined, (>>=), return, flip, otherwise)
-  import Data.List (intersperse, foldl1', unsnoc)
-  import Data.Void (Void)
-  import Data.Proxy (Proxy(..))
-  import Data.Functor (void, fmap)
-  import Data.Maybe (Maybe(..))
-  import Data.Bool (not, (&&), (||))
-  import Data.Function ((.), ($), id)
-  import Data.Foldable1(foldlMap1')
-  import Data.Foldable(foldl')
-  import Data.Tuple (fst, snd)
-  import Data.Char (Char, isSpace)
-  import Data.Semigroup((<>))
-  import Data.Eq((==),(/=))
   import Data.Text (Text)
-  import Data.Either
-  import qualified Data.Text as T
-  import qualified Data.Text.Encoding as TE
-  import MyLib.CLIParser
   import MyLib.LetExpr
-  import Control.Applicative (pure, (<$>), (<*>), (*>), (<*), (<|>))
-  import qualified Data.List.NonEmpty as NEL
-  import qualified Control.Monad.Combinators.NonEmpty as NE
-  import Text.Megaparsec (Parsec)
-  import qualified Text.Megaparsec as TM
-  import qualified Text.Megaparsec.Char as TMC
-  import qualified Text.Megaparsec.Stream as TMS
-  import Data.ByteString (ByteString)
-
-  import Data.List.NonEmpty (NonEmpty(..))
 
   data Tokens
     = Let
