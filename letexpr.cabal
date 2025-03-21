@@ -74,9 +74,6 @@ library
     build-depends:    base ^>=4.19.1.0
                     , text ^>= 2.1.2
                     , optparse-applicative
-                    , megaparsec
-                    , parser-combinators
-                    , containers
                     , hsshellscript ^>= 3.6.4
                     , bytestring
                     , bytestring-trie
