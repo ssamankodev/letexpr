@@ -26,23 +26,19 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
 
   --A let binding which holds a variable and datum.
   data LetBinding a = LetBinding Var a
-    deriving (Eq, Functor)
+    deriving (Functor)
 
   --A data type thar represents whether recursion is permitted in a given instance or not.
   data RecursionAllowance = Permit | Prohibit
-    deriving Eq
 
   --Represents text that either references a variable introduced by a let-binding or is just plain-text.
   newtype ExprText = ExprText Text
-    deriving (Eq)
 
   --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
   --The Text value is the prefix of the overall expression if it is not a variable.
   data ExprRec
     = ExprRec Var Text ExprRecData
     | ExprRecNoText Var ExprRecData
-    deriving (Eq)
-
 
   --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
   --Represents an expression with recursive references.
@@ -51,13 +47,11 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     | ExprRecDataNoText ExprRecData  --Represents a recursive variable
     | ExprRecDataFinal Text          --Represents a final recursive variable followed by a final Text value
     | ExprRecDataFinalNoText         --Represents a final recursive variable
-    deriving (Eq)
 
   --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
   data ExprRef
     = ExprRef Text ExprRefData
     | ExprRefNoText ExprRefData
-    deriving (Eq)
 
   --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
   --Represents an expression with references to other let bindings.
@@ -66,14 +60,12 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     | ExprRefDataNoText Var ExprRefData --Represents a non-recursive variable
     | ExprRefDataFinal Var Text         --Represents a final non-recursive variable followed by a final Text value
     | ExprRefDataFinalNoText Var        --Represents a final non-recursive variable
-    deriving (Eq)
 
   --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
   --Represents an expression with recursive references or non-recursive references to other let bindings.
   data ExprRefRec
     = ExprRefRec Var Text ExprRefRecData
     | ExprRefRecNoText Var ExprRefRecData
-    deriving (Eq)
 
   --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
   --Represents an expression with recursive references or non-recursive references to other let bindings.
@@ -86,7 +78,6 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     | ExprRefRecRefDataSwitchNoText Var ExprRecData --Represents a non-recursive variable followed by a recursive expression
     | ExprRefRecRecDataSwitch Text ExprRefData      --Represents a recursive variable followed by a Text value and a non-recursive expression
     | ExprRefRecRecDataSwitchNoText ExprRefData     --Represents a recursive variable followed by a non-recursive expression
-    deriving (Eq)
 
   --There exists 4 types of let bindings:
   --  Non-variable: The body only contains text with no references.
@@ -98,14 +89,13 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     | LetBindingRec ExprRec
     | LetBindingRef ExprRef
     | LetBindingRefRec ExprRefRec
-    deriving (Eq)
 
   --A container of two types of data, where the first type variable is the primary data type and the second type variable is the secondary data type. It can hold datum of the secondary data type before it holds a ContainerData of the same type variables, or it can just hold a ContainerData of the same type variables, or it can just hold a single datum of the secondary data type.
   data Container a b
     = Container b (ContainerData a b)
     | ContainerNoInitial (ContainerData a b)
     | ContainerSingle b
-    deriving (Eq, Functor)
+    deriving Functor
 
   instance Bifunctor Container where
     bimap f g (Container b rest) = Container (g b) $ bimap f g rest
@@ -130,7 +120,7 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
   data LetExpr dataType finalExpr
     = LetBind (LetBinding dataType) (LetExpr dataType finalExpr)
     | LetBindFinal (LetBinding dataType) finalExpr
-    deriving (Eq, Functor)
+    deriving Functor
 
   instance Bifunctor LetExpr where
     bimap f g (LetBind (LetBinding var expr) rest) = LetBind (LetBinding var $ f expr) $ bimap f g rest
@@ -141,7 +131,6 @@ module MyLib.LetExpr (LetExpr(..), ExprText(..), LetBinding(..), Var(..), Recurs
     = Valid a
     | ValidInexact a
     | Invalid a
-    deriving Eq
 
   --------------------
 
