@@ -61,7 +61,7 @@ module Main where
           --
           --  (Valid LetBindingTypes, Container (Either (Int, ExprText) (NonEmpty (Int, ExprText))) Text, Trie (Either (Int, ExprText) (NonEmpty (Int, ExprText))))
           --
-        Left value -> case validateRecursionLetBindingTypesNew . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer $ first (first flattenTuple . inverseDistributeEither) value of
+        Left value -> case validateRecursionLetBindingTypesNew . first (bimap (\(a, b, c) -> (a, b)) (fst)) . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer . first (second  (first toExprText)) $ first (first flattenTuple . inverseDistributeEither) value of
           Left invalidRecursions -> do
             T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
             --TODO: Implement printing of invalid recursive LetBindingTypes
@@ -119,7 +119,9 @@ module Main where
             let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
             mapM_ T.putStr $ uncurry betaReduceContainer containerized
             T.putStrLn Data.Text.empty
-        Right value -> case validateRecursionLetBindingTypesNew . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer $ first (first flattenTuple . inverseDistributeEither) value of
+
+        Right value -> case validateRecursionLetBindingTypesNew . first (bimap (\(a, b, c) -> (a, b)) (fst)) . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer . first (second (first toExprText)) $ first (first flattenTuple . inverseDistributeEither) value of
+        --Right value -> case validateRecursionLetBindingTypesNew . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer . first (second  (first toExprText)) $ first (first flattenTuple . inverseDistributeEither) value of
           Left invalidRecursions -> do
             T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
             --TODO: Replace print with actual formatted error message
@@ -136,7 +138,8 @@ module Main where
             T.putStrLn "[Error]: Input rebinds at least one mutually referential variable, which is invalid."
             T.putStrLn ""
             traverse_ (mapM_ T.putStrLn) . invalidRebindMessage $ fmap (fmap (fmap snd)) value
-          Right value -> case validateRecursionLetBindingTypesNew . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer $ first (first flattenTuple . inverseDistributeEither) value of
+          Right value -> case validateRecursionLetBindingTypesNew . first (bimap (\(a, b, c) -> (a, b)) (fst)) . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer . first (second (first toExprText)) $ first (first flattenTuple . inverseDistributeEither) value of
+          --Right value -> case validateRecursionLetBindingTypesNew . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer . first (second  (first toExprText)) $ first (first flattenTuple . inverseDistributeEither) value of
             Left invalidRecursions -> do
               T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
               --TODO: Replace print with actual formatted error message
@@ -164,7 +167,8 @@ module Main where
           T.putStrLn "[Error]: Input rebinds at least one mutually referential variable, which is invalid."
           T.putStrLn ""
           traverse_ (mapM_ T.putStrLn) . invalidRebindMessage . modifyListLetBinding snd $ getRebinds finalTrie
-        Right value -> case validateRecursionLetBindingTypesNew . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer $ first (first flattenTuple . inverseDistributeEither) value of
+        Right value -> case validateRecursionLetBindingTypesNew . first (bimap (\(a, b, c) -> (a, b)) (fst)) . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer . first (second (first toExprText)) $ first (first flattenTuple . inverseDistributeEither) value of
+        --Right value -> case validateRecursionLetBindingTypesNew . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer . first (second  (first toExprText)) $ first (first flattenTuple . inverseDistributeEither) value of
           Left invalidRecursions -> do
             T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
             --TODO: Replace print with actual formatted error message
@@ -181,7 +185,8 @@ module Main where
             T.putStrLn "[Error]: Input rebinds at least one mutually referential variable, which is invalid."
             T.putStrLn ""
             traverse_ (mapM_ T.putStrLn) . invalidRebindMessage $ fmap (fmap (fmap snd)) value
-          Right value -> case validateRecursionLetBindingTypesNew . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer $ first (first flattenTuple . inverseDistributeEither) value of
+          Right value -> case validateRecursionLetBindingTypesNew . first (bimap (\(a, b, c) -> (a, b)) (fst)) . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer . first (second (first toExprText)) $ first (first flattenTuple . inverseDistributeEither) value of
+          --Right value -> case validateRecursionLetBindingTypesNew . first (first validateLetBindingTypesContainer) . mapLetExprEitherLeft identifyVariablesContainer . first (second  (first toExprText)) $ first (first flattenTuple . inverseDistributeEither) value of
             Left invalidRecursions -> do
               T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
               --TODO: Replace print with actual formatted error message
