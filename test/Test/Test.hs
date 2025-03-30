@@ -15,5 +15,11 @@ module Test.Test (tests, test1) where
   test1 :: Property
   test1 =
     property $ do
-      xs <- forAll $ Gen.text (Range.linear 0 100) Gen.unicode
+      xs <- forAll $ Gen.text (Range.linear 0 10000) Gen.unicode
       exprTextT (ExprText xs) === xs
+
+  test2 :: Property
+  test2 =
+    property $ do
+      xs <- forAll $ Gen.utf8 (Range.linear 0 10000) Gen.unicode
+      varBS (MyLib.Var xs) === xs
