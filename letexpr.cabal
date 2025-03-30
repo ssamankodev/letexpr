@@ -66,6 +66,7 @@ library
                     , MyLib.LetExpr
                     , MyLib.CLIToLetExpr
                     , MyLib.BetaReduce
+                    , MyLib.Print
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
