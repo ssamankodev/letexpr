@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
-module MyLib.BetaReduce(betaReduceContainer, toContainerIntText, letExprContainerToFinalContainer, validateRecursionLetBindingTypesNew, validateLetBindingTypesContainer, identifyVariablesContainer, identifyVariablesInTextContainer, linearUnfoldIndexValuesTrie, mutualUnfoldIndexValuesTrie, validRecursion, getRebinds) where
+module MyLib.BetaReduce(betaReduceContainer, eitherToContainerText, leftToContainerText, letExprContainerToFinalContainer, validateRecursionLetBindingTypesNew, validateLetBindingTypesContainer, identifyVariablesContainer, identifyVariablesInTextContainer, linearUnfoldIndexValuesTrie, mutualUnfoldIndexValuesTrie, validRecursion, getRebinds) where
 
   import MyLib.LetExpr
   import Data.List.NonEmpty (NonEmpty)
@@ -30,22 +30,27 @@ module MyLib.BetaReduce(betaReduceContainer, toContainerIntText, letExprContaine
     -> NonEmpty Text
   betaReduceContainer containerObj arr = foldlContainerToList $ bimap (\index -> betaReduceContainer (arr DA.! index) arr) NE.singleton containerObj
 
-  toContainerIntText
-    :: Either (ExprRef, Container (Int, Text) Text) ExprText
-    -> Container Int Text
-  toContainerIntText (Left value) = first fst $ snd value
-  toContainerIntText (Right value) = exprTextToContainer value
+  leftToContainerText
+    :: (a, Container (b, Text) Text)
+    -> Container b Text
+  leftToContainerText = first fst . snd
+
+  eitherToContainerText
+    :: Either (Container a Text) ExprText
+    -> Container a Text
+  eitherToContainerText (Left value) = value
+  eitherToContainerText (Right value) = exprTextToContainer value
 
   letExprContainerToFinalContainer
-    :: LetExpr (Container Int Text) (Container Int Text)
-    -> (Container Int Text, Array Int (Container Int Text))
+    :: LetExpr a a
+    -> (a, Array Int a)
   letExprContainerToFinalContainer letExpr =
     let
       go
         :: Int
-        -> [(Int, Container Int Text)]
-        -> LetExpr (Container Int Text) (Container Int Text)
-        -> (Container Int Text, Int, [(Int, Container Int Text)])
+        -> [(Int, a)]
+        -> LetExpr a a
+        -> (a, Int, [(Int, a)])
       go accum accumAssocs (LetBind lb rest) = go (accum + 1) ((accum, letBindingValue lb) : accumAssocs) rest
       go accum accumAssocs (LetBindFinal lb finalContainer) = (finalContainer, accum, (accum, letBindingValue lb) : accumAssocs)
     in
@@ -62,13 +67,8 @@ module MyLib.BetaReduce(betaReduceContainer, toContainerIntText, letExprContaine
         -> Maybe (LetBinding LetBindingTypes)
       filterFn (LetBinding var (Left (Invalid lbt))) = Just $ LetBinding var lbt
       filterFn _ = Nothing
-
-      mapFn :: (Either (Valid LetBindingTypes, Container c Text) ExprText)
-            -> Container c Text
-      mapFn (Left (_, container)) = container
-      mapFn (Right expr) = exprTextToContainer expr
     in
-    filterMapOrMapLetBinding (filterFn . fmap (first fst)) mapFn letExpr
+    filterMapOrMapLetBinding (filterFn . fmap (first fst)) (eitherToContainerText . first snd) letExpr
 
   --Either return Invalid recursive let bindings or return LetExpr (Container Int Text) a to be turned into an array to supply to the final expression of a transformed-into Container Int Text
   validateRecursionLetBindingTypes
@@ -78,15 +78,11 @@ module MyLib.BetaReduce(betaReduceContainer, toContainerIntText, letExprContaine
          (LetExpr (Container Int Text) a)
   validateRecursionLetBindingTypes letExpr =
     let
-      filterFn :: LetBinding (Either (Valid LetBindingTypes, d) e, f) -> Maybe (LetBinding LetBindingTypes)
-      filterFn (LetBinding var (Left (Invalid lbt, _), _)) = Just $ LetBinding var lbt
+      filterFn :: LetBinding (Either (Valid LetBindingTypes) ExprText) -> Maybe (LetBinding LetBindingTypes)
+      filterFn (LetBinding var (Left (Invalid lbt))) = Just $ LetBinding var lbt
       filterFn _ = Nothing
-
-      mapFn :: (Either (Valid LetBindingTypes, Container Int Text) ExprText, b) -> Container Int Text
-      mapFn (Left (_, container), _) = container
-      mapFn (Right expr, _) = exprTextToContainer expr
     in
-    filterMapOrMapLetBinding filterFn mapFn letExpr
+    filterMapOrMapLetBinding (filterFn . fmap (first fst)) (eitherToContainerText . first snd) $ first fst letExpr
 
   validateLetBindingTypesContainer
     :: (RecursionAllowance, LetBindingTypes, a, b)
