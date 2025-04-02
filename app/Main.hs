@@ -68,7 +68,7 @@ module Main where
             --print invalidRecursions
             T.putStrLn Data.Text.empty
           Right validLetExpr -> do
-            let simplifiedFinalExprValidLetExpr = bimap (first (fst . getFirst)) (toContainerIntText . first (second (first getFirst))) validLetExpr
+            let simplifiedFinalExprValidLetExpr = bimap (first (fst . getFirst)) (eitherToContainerText . first (leftToContainerText . second (first getFirst))) validLetExpr
             -- The explanation for modifying the variable 'validLetExpr' is that it originally has the type of
             --
             -- Either
@@ -128,7 +128,7 @@ module Main where
             --print invalidRecursions
             T.putStrLn Data.Text.empty
           Right validLetExpr -> do
-            let simplifiedFinalExprValidLetExpr = bimap (first fst) toContainerIntText validLetExpr
+            let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherToContainerText . first leftToContainerText) validLetExpr
             let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
             mapM_ T.putStr $ uncurry betaReduceContainer containerized
             T.putStrLn Data.Text.empty
@@ -146,7 +146,7 @@ module Main where
               --print invalidRecursions
               T.putStrLn Data.Text.empty
             Right validLetExpr -> do
-              let simplifiedFinalExprValidLetExpr = bimap (first fst) toContainerIntText validLetExpr
+              let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherToContainerText . first leftToContainerText) validLetExpr
               let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
               mapM_ T.putStr $ uncurry betaReduceContainer containerized
               T.putStrLn Data.Text.empty
@@ -175,7 +175,7 @@ module Main where
             --print invalidRecursions
             T.putStrLn Data.Text.empty
           Right validLetExpr -> do
-            let simplifiedFinalExprValidLetExpr = bimap (first fst) toContainerIntText validLetExpr
+            let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherToContainerText . first leftToContainerText) validLetExpr
             let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
             mapM_ T.putStr $ uncurry betaReduceContainer containerized
             T.putStrLn Data.Text.empty
@@ -193,7 +193,7 @@ module Main where
               --print invalidRecursions
               T.putStrLn Data.Text.empty
             Right validLetExpr -> do
-              let simplifiedFinalExprValidLetExpr = bimap (first fst) toContainerIntText validLetExpr
+              let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherToContainerText . first leftToContainerText) validLetExpr
               let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
               mapM_ T.putStr $ uncurry betaReduceContainer containerized
               T.putStrLn Data.Text.empty
