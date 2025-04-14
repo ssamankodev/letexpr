@@ -21,18 +21,18 @@ module MyLib.Print(invalidRebindMessage, variableUnderline, exprRecInvalidRecurs
   containerVariableUnderline
     :: Container Var Text
     -> NonEmpty Text
-  containerVariableUnderline = containerToList . bimap (T.map (const '^') . varT) (T.map (const ' '))
+  containerVariableUnderline = containerToList . bimap (T.map (const '^') . varToText) (T.map (const ' '))
 
   --This function should be explaining how the given LetBinding was invalid.
   --It should state what the given Var/whole LetBinding is, then underline
   exprRecInvalidRecursionMessage :: Var -> Text
-  exprRecInvalidRecursionMessage var = "The let expression contains a let binding that recursively binds variable '" `T.append` varT var `T.append` "' to itself."
+  exprRecInvalidRecursionMessage var = "The let expression contains a let binding that recursively binds variable '" `T.append` varToText var `T.append` "' to itself."
 
   letBindingRebindsMessage
     :: LetBinding (NonEmpty Text)
     -> NonEmpty Text
   letBindingRebindsMessage lb =
-    ("Variable '" <> varT (letBindingVar lb) <> "' was bound to the following definitions, in order of recency:")
+    ("Variable '" <> varToText (letBindingVar lb) <> "' was bound to the following definitions, in order of recency:")
     <| fmap (T.unfoldrN 4 (\x -> Just (' ', x)) () <>) (letBindingValue lb)
 
   invalidRebindMessage

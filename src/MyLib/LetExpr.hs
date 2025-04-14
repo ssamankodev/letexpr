@@ -5,11 +5,11 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module MyLib.LetExpr (LetExpr(..), ExprText, ExprRef, ExprRefData, ExprRec, ExprRefRec, Container, ContainerData, LetBinding(..), Var, RecursionAllowance(..), LetBindingTypes(..), exprRef, exprRefNoText, exprRefData, exprRefDataNoText, exprRefDataFinal, exprRefDataFinalNoText, container, containerNoInitial, containerSingle, containerData, containerDataNoExtra, containerDataFinal, containerDataFinalNoExtra, firstLetBindings, mapLetBindingsLeft, mapLetExprEitherLeft, getFirst, getFinalLetBindingValue, varT, varBS, toVar, bsToVar, exprTextToContainer, inverseDistributeEither, flattenTuple, exprTextT, letExprLetBind, letExprLetBindFinal, letBinding, toExprText, letBindingTypesToContainer, containerToList, letBindingVar, letBindingValue, foldlContainerToList, foldlContainerDataToList, filterMapOrMap, filterMapOrMapLetBinding, foldlLetExpr, exprRefToLetBindingTypes) where
+module MyLib.LetExpr (LetExpr(..), ExprText, ExprRef, ExprRefData, ExprRec, ExprRefRec, Container, ContainerData, LetBinding, Var, RecursionAllowance(..), LetBindingTypes(..), exprRef, exprRefNoText, exprRefData, exprRefDataNoText, exprRefDataFinal, exprRefDataFinalNoText, container, containerNoInitial, containerSingle, containerData, containerDataNoExtra, containerDataFinal, containerDataFinalNoExtra, textToVar, bsToVar, exprTextToContainer, flattenTuple, exprTextT, letExprLetBind, letExprLetBindFinal, letBinding, toExprText, letBindingTypesToContainer, containerToList, letBindingVar, letBindingValue, foldlContainerToList, foldlContainerDataToList, filterMapOrMap, filterMapOrMapLetBinding, foldlLetExpr, exprRefToLetBindingTypes, firstLetBindings, letBindingCaseVar, letBindingCaseVarBS, letBindingCaseVarExpr, letBindingCaseVarBSExpr, varToText, setLetBindingValue) where
 
   import Data.Text (Text())
   import qualified Data.Text.Encoding as TE
-  import Data.List.NonEmpty (NonEmpty(..), (<|), append)
+  import Data.List.NonEmpty (NonEmpty, (<|))
   import qualified Data.List.NonEmpty as NE
   import Data.Bifunctor
   import Data.ByteString (ByteString)
@@ -132,25 +132,25 @@ module MyLib.LetExpr (LetExpr(..), ExprText, ExprRef, ExprRefData, ExprRec, Expr
     -> ExprText
   toExprText = ExprText
 
-  toVar
+  textToVar
     :: Text
     -> Var
-  toVar = Var . TE.encodeUtf8
+  textToVar = Var . TE.encodeUtf8
 
   bsToVar
     :: ByteString
     -> Var
   bsToVar = Var
 
-  varT
+  varToText
     :: Var
     -> Text
-  varT (Var name) = TE.decodeUtf8 name
+  varToText (Var bs) = TE.decodeUtf8 bs
 
-  varBS
+  varToBS
     :: Var
     -> ByteString
-  varBS (Var name) = name
+  varToBS (Var bs) = bs
 
   letBindingVar
     :: LetBinding a
@@ -460,12 +460,6 @@ module MyLib.LetExpr (LetExpr(..), ExprText, ExprRef, ExprRefData, ExprRec, Expr
     -> (a, b, c)
   flattenTuple ((a, b), c) = (a, b, c)
 
-  inverseDistributeEither
-    :: (Either a b, c)
-    -> Either (a, c) (b, c)
-  inverseDistributeEither (Left a, c) = Left (a, c)
-  inverseDistributeEither (Right b, c) = Right (b, c)
-
   foldlLetExpr
     :: (b -> LetBinding a -> b)
     -> b
@@ -474,61 +468,39 @@ module MyLib.LetExpr (LetExpr(..), ExprText, ExprRef, ExprRefData, ExprRec, Expr
   foldlLetExpr fn accum (LetBind lb rest) = foldlLetExpr fn (fn accum lb) rest
   foldlLetExpr fn accum (LetBindFinal lb _) = fn accum lb
 
-  getFirst
-    :: Either a (NonEmpty a)
-    -> a
-  getFirst (Left a) = a
-  getFirst (Right (a :| _)) = a
-
-  getFinalLetBindingValue :: LetExpr a b -> a
-  getFinalLetBindingValue (LetBind _ rest) = getFinalLetBindingValue rest
-  getFinalLetBindingValue (LetBindFinal (LetBinding _ value) _) = value
-
-  embedLetBinding
-    :: LetBinding a
-    -> LetBinding (LetBinding a)
-  embedLetBinding lb@(LetBinding var expr) = LetBinding var lb
-
-  mapLetBinding
-    :: (LetBinding a -> b)
-    -> LetBinding a
-    -> LetBinding b
-  mapLetBinding fn = fmap fn . embedLetBinding
-
-  bimapLetBindings
-    :: (LetBinding a -> c)
-    -> (b -> d)
-    -> LetExpr a b
-    -> LetExpr c d
-  bimapLetBindings fnLB fnFE (LetBind lb next) = LetBind (mapLetBinding fnLB lb) $ bimapLetBindings fnLB fnFE next
-  bimapLetBindings fnLB fnFE (LetBindFinal lb finalExpression) = LetBindFinal (mapLetBinding fnLB lb) $ fnFE finalExpression
-
   firstLetBindings
     :: (LetBinding a -> c)
     -> LetExpr a b
     -> LetExpr c b
-  firstLetBindings fn = bimapLetBindings fn id
+  firstLetBindings fnLB (LetBind lb next) = LetBind (fmap (const (fnLB lb)) lb) $ firstLetBindings fnLB next
+  firstLetBindings fnLB (LetBindFinal lb finalExpression) = LetBindFinal (fmap (const (fnLB lb)) lb) finalExpression
 
-  mapLetBindingsLeft
-    :: (LetBinding a -> b)
-    -> LetBinding (Either a c)
-    -> Either b c
-  mapLetBindingsLeft fn lb = letBindingValue . eitherToLetBinding . first (fmap fn . embedLetBinding) $ letBindingToEither lb
+  letBindingCaseVar
+    :: (Var -> a)
+    -> LetBinding b
+    -> a
+  letBindingCaseVar fn (LetBinding var _) = fn var
 
-  mapLetExprEitherLeft
-    :: (LetBinding a -> b)
-    -> LetExpr (Either a c) d
-    -> LetExpr (Either b c) d
-  mapLetExprEitherLeft fn = firstLetBindings (mapLetBindingsLeft fn)
+  letBindingCaseVarBS
+    :: (ByteString -> a)
+    -> LetBinding b
+    -> a
+  letBindingCaseVarBS fn (LetBinding (Var bs) _) = fn bs
 
-  letBindingToEither
-    :: LetBinding (Either a b)
-    -> Either (LetBinding a) (LetBinding b)
-  letBindingToEither (LetBinding var (Left value)) = Left $ LetBinding var value
-  letBindingToEither (LetBinding var (Right value)) = Right $ LetBinding var value
+  letBindingCaseVarExpr
+    :: (Var -> b -> a)
+    -> LetBinding b
+    -> a
+  letBindingCaseVarExpr fn (LetBinding var expr) = fn var expr
 
-  eitherToLetBinding
-    :: Either (LetBinding a) (LetBinding b)
-    -> LetBinding (Either a b)
-  eitherToLetBinding (Left (LetBinding var value)) = LetBinding var $ Left value
-  eitherToLetBinding (Right (LetBinding var value)) = LetBinding var $ Right value
+  letBindingCaseVarBSExpr
+    :: (ByteString -> b -> a)
+    -> LetBinding b
+    -> a
+  letBindingCaseVarBSExpr fn (LetBinding (Var bs) expr) = fn bs expr
+
+  setLetBindingValue
+    :: b
+    -> LetBinding a
+    -> LetBinding b
+  setLetBindingValue value (LetBinding var _) = LetBinding var value
