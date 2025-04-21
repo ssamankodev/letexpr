@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Test.Test (tests, test1) where
+module Test.Test (tests) where
 
   import MyLib
   import Hedgehog
@@ -11,15 +11,16 @@ module Test.Test (tests, test1) where
   tests =
     checkParallel $$(discover)
 
-  --First attempt at trying to use the hedgehog library for my program
-  test1 :: Property
-  test1 =
-    property $ do
-      xs <- forAll $ Gen.text (Range.linear 0 10000) Gen.unicode
-      exprTextT (ExprText xs) === xs
-
-  test2 :: Property
-  test2 =
+  varRoundTripBS :: Property
+  varRoundTripBS =
     property $ do
       xs <- forAll $ Gen.utf8 (Range.linear 0 10000) Gen.unicode
-      varBS (MyLib.Var xs) === xs
+      MyLib.varToBS (MyLib.bsToVar xs) === xs
+
+  testFlattenTuple :: Property
+  testFlattenTuple =
+    property $ do
+      xs <- forAll $ Gen.integral_ (Range.linear 0 10000)
+      ys <- forAll $ Gen.integral_ (Range.linear 0 10000)
+      zs <- forAll $ Gen.integral_ (Range.linear 0 10000)
+      MyLib.flattenTuple ((xs, ys), zs) === (xs, ys, zs)
