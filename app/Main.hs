@@ -62,7 +62,7 @@ module Main where
           --
           --  (Valid LetBindingTypes, Container (Either (Int, ExprText) (NonEmpty (Int, ExprText))) Text, Trie (Either (Int, ExprText) (NonEmpty (Int, ExprText))))
           --
-        Left value -> case validateRecursionLetBindingTypes . first (bimap ((\(a, b, _) -> (a, b)) . validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) toExprText . ((\(x, y) -> first (\innerX -> fmap (innerX,) y) x) . second (fmap snd))) $ firstLetBindings (\lb -> (fst $ letBindingValue lb, lb)) value of
+        Left value -> case validateRecursionLetBindingTypesContainer . first (bimap ((\(a, b, _) -> (a, b)) . validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) textToExprText . ((\(x, y) -> first (\innerX -> fmap (innerX,) y) x) . second (fmap snd))) $ firstLetBindings (\lb -> (fst $ letBindingValue lb, lb)) value of
         --Left value -> case validateRecursionLetBindingTypes . first (bimap ((\(a, b, _) -> (a, b)) . validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) toExprText) $ firstLetBindings (\lb -> first ((\pair -> fmap (const pair) lb) . (, snd $ letBindingValue lb)) $ fst (letBindingValue lb)) value of
         --Left value -> case validateRecursionLetBindingTypes . first (bimap ((\(a, b, _) -> (a, b)) . validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) toExprText) $ firstLetBindings (\(LetBinding var (x, y)) -> first (LetBinding var . (, y)) x) value of
           Left invalidRecursions -> do
@@ -125,14 +125,14 @@ module Main where
             let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
             mapM_ T.putStr $ uncurry betaReduceContainer containerized
             T.putStrLn Data.Text.empty
-        Right value -> case validateRecursionLetBindingTypes . first (bimap ((\(a, b, _) -> (a, b)) . validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) toExprText . ((\(x, y) -> first (\innerX -> fmap (innerX,) y) x) . second (fmap snd))) $ firstLetBindings (\lb -> (fst $ letBindingValue lb, lb)) value of
+        Right value -> case validateRecursionLetBindingTypesContainer . first (bimap ((\(a, b, _) -> (a, b)) . validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) textToExprText . ((\(x, y) -> first (\innerX -> fmap (innerX,) y) x) . second (fmap snd))) $ firstLetBindings (\lb -> (fst $ letBindingValue lb, lb)) value of
           Left invalidRecursions -> do
             T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
             --TODO: Replace print with actual formatted error message
             --print invalidRecursions
             T.putStrLn Data.Text.empty
           Right validLetExpr -> do
-            let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherValue . bimap leftToContainerText exprTextToContainer) validLetExpr
+            let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherValue . bimap (first fst . snd) exprTextToContainer) validLetExpr
             let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
             mapM_ T.putStr $ uncurry betaReduceContainer containerized
             T.putStrLn Data.Text.empty
@@ -142,14 +142,14 @@ module Main where
             T.putStrLn "[Error]: Input rebinds at least one mutually referential variable, which is invalid."
             T.putStrLn ""
             traverse_ (mapM_ T.putStrLn) . invalidRebindMessage $ fmap (fmap (fmap snd)) value
-          Right value -> case validateRecursionLetBindingTypes . first (bimap ((\(a, b, _) -> (a, b)) . validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) toExprText . ((\(x, y) -> first (\innerX -> fmap (innerX,) y) x) . second (fmap snd))) $ firstLetBindings (\lb -> (fst $ letBindingValue lb, lb)) value of
+          Right value -> case validateRecursionLetBindingTypesContainer . first (bimap ((\(a, b, _) -> (a, b)) . validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) textToExprText . ((\(x, y) -> first (\innerX -> fmap (innerX,) y) x) . second (fmap snd))) $ firstLetBindings (\lb -> (fst $ letBindingValue lb, lb)) value of
             Left invalidRecursions -> do
               T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
               --TODO: Replace print with actual formatted error message
               --print invalidRecursions
               T.putStrLn Data.Text.empty
             Right validLetExpr -> do
-              let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherValue . bimap leftToContainerText exprTextToContainer) validLetExpr
+              let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherValue . bimap (first fst . snd) exprTextToContainer) validLetExpr
               let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
               mapM_ T.putStr $ uncurry betaReduceContainer containerized
               T.putStrLn Data.Text.empty
@@ -170,14 +170,14 @@ module Main where
           T.putStrLn "[Error]: Input rebinds at least one mutually referential variable, which is invalid."
           T.putStrLn ""
           traverse_ (mapM_ T.putStrLn) . invalidRebindMessage . modifyListLetBinding snd $ getRebinds finalTrie
-        Right value -> case validateRecursionLetBindingTypes . first (bimap ((\(a, b, _) -> (a, b)) . validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) toExprText . ((\(x, y) -> first (\innerX -> fmap (innerX,) y) x) . second (fmap snd))) $ firstLetBindings (\lb -> (fst $ letBindingValue lb, lb)) value of
+        Right value -> case validateRecursionLetBindingTypesContainer . first (bimap ((\(a, b, _) -> (a, b)) . validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) textToExprText . ((\(x, y) -> first (\innerX -> fmap (innerX,) y) x) . second (fmap snd))) $ firstLetBindings (\lb -> (fst $ letBindingValue lb, lb)) value of
           Left invalidRecursions -> do
             T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
             --TODO: Replace print with actual formatted error message
             --print invalidRecursions
             T.putStrLn Data.Text.empty
           Right validLetExpr -> do
-            let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherValue . bimap leftToContainerText exprTextToContainer) validLetExpr
+            let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherValue . bimap (first fst . snd) exprTextToContainer) validLetExpr
             let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
             mapM_ T.putStr $ uncurry betaReduceContainer containerized
             T.putStrLn Data.Text.empty
@@ -187,14 +187,14 @@ module Main where
             T.putStrLn "[Error]: Input rebinds at least one mutually referential variable, which is invalid."
             T.putStrLn ""
             traverse_ (mapM_ T.putStrLn) . invalidRebindMessage $ fmap (fmap (fmap snd)) value
-          Right value -> case validateRecursionLetBindingTypes . first (bimap ((\(a, b, _) -> (a, b)) . validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) toExprText . ((\(x, y) -> first (\innerX -> fmap (innerX,) y) x) . second (fmap snd))) $ firstLetBindings (\lb -> (fst $ letBindingValue lb, lb)) value of
+          Right value -> case validateRecursionLetBindingTypesContainer . first (bimap ((\(a, b, _) -> (a, b)) . validateLetBindingTypesContainer . identifyVariablesContainer . fmap flattenTuple) textToExprText . ((\(x, y) -> first (\innerX -> fmap (innerX,) y) x) . second (fmap snd))) $ firstLetBindings (\lb -> (fst $ letBindingValue lb, lb)) value of
             Left invalidRecursions -> do
               T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
               --TODO: Replace print with actual formatted error message
               --print invalidRecursions
               T.putStrLn Data.Text.empty
             Right validLetExpr -> do
-              let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherValue . bimap leftToContainerText exprTextToContainer) validLetExpr
+              let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherValue . bimap (first fst . snd) exprTextToContainer) validLetExpr
               let containerized = letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
               mapM_ T.putStr $ uncurry betaReduceContainer containerized
               T.putStrLn Data.Text.empty

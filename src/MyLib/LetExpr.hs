@@ -1,18 +1,18 @@
+{-# LANGUAGE StarIsType #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE OverloadedStrings #-}
 
-module MyLib.LetExpr (LetExpr(..), ExprText, ExprRef, ExprRefData, ExprRec, ExprRefRec, Container, ContainerData, LetBinding, Var, RecursionAllowance(..), LetBindingTypes(..), exprRef, exprRefNoText, exprRefData, exprRefDataNoText, exprRefDataFinal, exprRefDataFinalNoText, container, containerNoInitial, containerSingle, containerData, containerDataNoExtra, containerDataFinal, containerDataFinalNoExtra, textToVar, bsToVar, exprTextToContainer, flattenTuple, exprTextT, letExprLetBind, letExprLetBindFinal, letBinding, toExprText, letBindingTypesToContainer, containerToList, letBindingVar, letBindingValue, foldlContainerToList, foldlContainerDataToList, filterMapOrMap, filterMapOrMapLetBinding, foldlLetExpr, exprRefToLetBindingTypes, firstLetBindings, letBindingCaseVar, letBindingCaseVarBS, letBindingCaseVarExpr, letBindingCaseVarBSExpr, varToText, setLetBindingValue) where
+module MyLib.LetExpr (LetExpr(..), ExprText, Container(..), ContainerShell(..), ContainerData, LetBinding, Var, RecursionAllowance(..), LetBindingTypesContainer(..), Normal(..), Factor(..), ContainerNormal(..),  bsToVar, exprTextToContainer, flattenTuple, letExprLetBind, letExprLetBindFinal, letBinding, textToExprText, exprTextToText, containerToList, letBindingValue, foldlContainerToList, foldlContainerDataToList, filterMapOrMapLetBinding, foldlLetExpr, firstLetBindings, varToBS, letBindingCaseVar, letBindingCaseVarBS, prependContainerData, normalToContainerData, ContainerSingle(..), letBindingTypesContainerToContainer) where
 
-  import Data.Text (Text())
-  import qualified Data.Text.Encoding as TE
-  import Data.List.NonEmpty (NonEmpty, (<|))
+  import Data.Text (Text)
+  import Data.List.NonEmpty (NonEmpty(..), (<|))
   import qualified Data.List.NonEmpty as NE
   import Data.Bifunctor
   import Data.ByteString (ByteString)
+  import Data.Foldable1 (fold1)
 
   --Is a newtype for Text that represents a variable name
   newtype Var = Var ByteString
@@ -28,87 +28,106 @@ module MyLib.LetExpr (LetExpr(..), ExprText, ExprRef, ExprRefData, ExprRec, Expr
   --Represents text that either references a variable introduced by a let-binding or is just plain-text.
   newtype ExprText = ExprText Text
 
-  --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
-  --The Text value is the prefix of the overall expression if it is not a variable.
-  data ExprRec
-    = ExprRec Var Text ExprRecData
-    | ExprRecNoText Var ExprRecData
-
-  --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
-  --Represents an expression with recursive references.
-  data ExprRecData
-    = ExprRecData Text ExprRecData   --Represents a recursive variable followed by a Text value
-    | ExprRecDataNoText ExprRecData  --Represents a recursive variable
-    | ExprRecDataFinal Text          --Represents a final recursive variable followed by a final Text value
-    | ExprRecDataFinalNoText         --Represents a final recursive variable
-
-  --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
-  data ExprRef
-    = ExprRef Text ExprRefData
-    | ExprRefNoText ExprRefData
-
-  --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
-  --Represents an expression with references to other let bindings.
-  data ExprRefData
-    = ExprRefData Var Text ExprRefData  --Represents a non-recursive variable followed by a Text value
-    | ExprRefDataNoText Var ExprRefData --Represents a non-recursive variable
-    | ExprRefDataFinal Var Text         --Represents a final non-recursive variable followed by a final Text value
-    | ExprRefDataFinalNoText Var        --Represents a final non-recursive variable
-
-  --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
-  --Represents an expression with recursive references or non-recursive references to other let bindings.
-  data ExprRefRec
-    = ExprRefRec Var Text ExprRefRecData
-    | ExprRefRecNoText Var ExprRefRecData
-
-  --INVARIANT TO UPHOLD: The Text values should not be empty. If they are, they should be switched to the alternate data constructor which is equivalent except for not storing a Text value.
-  --Represents an expression with recursive references or non-recursive references to other let bindings.
-  data ExprRefRecData
-    = ExprRefRecRefData Var Text ExprRefRecData     --Represents a non-recursive variable followed by a Text value
-    | ExprRefRecRefDataNoText Var ExprRefRecData    --Represents a non-recursive variable followed by a Text value
-    | ExprRefRecRecData Text ExprRefRecData         --Represents a recursive variable followed by a Text value
-    | ExprRefRecRecDataNoText ExprRefRecData        --Represents a recursive variable
-    | ExprRefRecRefDataSwitch Var Text ExprRecData  --Represents a non-recursive variable followed by a Text value and a recursive expression
-    | ExprRefRecRefDataSwitchNoText Var ExprRecData --Represents a non-recursive variable followed by a recursive expression
-    | ExprRefRecRecDataSwitch Text ExprRefData      --Represents a recursive variable followed by a Text value and a non-recursive expression
-    | ExprRefRecRecDataSwitchNoText ExprRefData     --Represents a recursive variable followed by a non-recursive expression
-
-  --There exists 4 types of let bindings:
-  --  Non-variable: The body only contains text with no references.
-  --  Recursive: The body contains references, but only recursive references.
-  --  Reference: The body contains references, but only non-recursive references.
-  --  Reference-Recursive: The body contains references, both recursive and non-recursive.
-  data LetBindingTypes
-    = LetBindingNonVar ExprText
-    | LetBindingRec ExprRec
-    | LetBindingRef ExprRef
-    | LetBindingRefRec ExprRefRec
+  data LetBindingTypesContainer
+    = LetBindingContainerSingle (ContainerSingle Text)
+    | LetBindingContainerFactor (ContainerFactor Var Text)
+    | LetBindingContainerNormal (ContainerNormal Var Text)
+    | LetBindingContainerFactorOrNormal (ContainerFactorOrNormal Var Text)
 
   --A container of two types of data, where the first type variable is the primary data type and the second type variable is the secondary data type. It can hold datum of the secondary data type before it holds a ContainerData of the same type variables, or it can just hold a ContainerData of the same type variables, or it can just hold a single datum of the secondary data type.
   data Container a b
-    = Container b (ContainerData a b)
-    | ContainerNoInitial (ContainerData a b)
-    | ContainerSingle b
-    deriving Functor
+    = Container (ContainerShell b (ContainerData a b))
+    | ContainerSingle (ContainerSingle b)
+
+  instance Functor (Container a) where
+    fmap fn (Container (ContainerShell initial (ContainerData rest))) = Container (ContainerShell (fn initial) (ContainerData $ fmap (second fn) rest))
+    fmap fn (Container (ContainerShellNoExtra (ContainerData rest))) = Container (ContainerShellNoExtra (ContainerData $ fmap (second fn) rest))
+    fmap fn (ContainerSingle (ContainerSingleValue value)) = ContainerSingle . ContainerSingleValue $ fn value
 
   instance Bifunctor Container where
-    bimap f g (Container b rest) = Container (g b) $ bimap f g rest
-    bimap f g (ContainerNoInitial rest) = ContainerNoInitial $ bimap f g rest
-    bimap _ g (ContainerSingle b) = ContainerSingle (g b)
+    bimap f g (Container rest) = Container $ bimap g (bimap f g) rest
+    bimap _ g (ContainerSingle (ContainerSingleValue b)) = ContainerSingle $ ContainerSingleValue (g b)
+
+  newtype ContainerSingle a
+    = ContainerSingleValue a
+    deriving Functor
 
   --A container of two types of data, where every constructor must at minimum hold one datum of the primary data type (i.e., the first type variable). It may additionally hold a datum of the secondary data type (e.g., the second type variable).
-  data ContainerData a b
-    = ContainerData a b (ContainerData a b)
-    | ContainerDataNoExtra a (ContainerData a b)
-    | ContainerDataFinal a b
-    | ContainerDataFinalNoExtra a
-    deriving (Eq, Functor)
+  newtype ContainerData a b
+    = ContainerData (NonEmpty (Normal a b))
+    deriving Functor
 
   instance Bifunctor ContainerData where
-    bimap f g (ContainerData a b rest) = ContainerData (f a) (g b) $ bimap f g rest
-    bimap f g (ContainerDataNoExtra a rest) = ContainerDataNoExtra (f a) $ bimap f g rest
-    bimap f g (ContainerDataFinal a b) = ContainerDataFinal (f a) (g b)
-    bimap f _ (ContainerDataFinalNoExtra a) = ContainerDataFinalNoExtra (f a)
+    bimap f g (ContainerData nonEmptyNormal) = ContainerData $ fmap (bimap f g) nonEmptyNormal
+
+  data ContainerShell a b
+    = ContainerShell a b
+    | ContainerShellNoExtra b
+    deriving Functor
+
+  instance Bifunctor ContainerShell where
+    bimap f g (ContainerShell a b) = ContainerShell (f a) (g b)
+    bimap _ g (ContainerShellNoExtra b) = ContainerShellNoExtra (g b)
+
+  newtype ContainerNormal a b
+    = ContainerNormal (ContainerShell b (ContainerData a b))
+
+  instance Functor (ContainerNormal a) where
+    fmap f (ContainerNormal (ContainerShell b (ContainerData nonEmpty))) = ContainerNormal (ContainerShell (f b) (ContainerData $ fmap (second f) nonEmpty))
+    fmap f (ContainerNormal (ContainerShellNoExtra (ContainerData nonEmpty))) = ContainerNormal (ContainerShellNoExtra (ContainerData $ fmap (second f) nonEmpty))
+
+  instance Bifunctor ContainerNormal where
+    bimap f g (ContainerNormal (ContainerShell initial (ContainerData rest))) = ContainerNormal (ContainerShell (g initial) (ContainerData $ fmap (bimap f g) rest))
+    bimap f g (ContainerNormal (ContainerShellNoExtra (ContainerData rest))) = ContainerNormal (ContainerShellNoExtra (ContainerData $ fmap (bimap f g) rest))
+
+  data ContainerFactor a b
+    = ContainerFactor a (ContainerShell b (NonEmpty (Factor b)))
+
+  instance Functor (ContainerFactor a) where
+    fmap f (ContainerFactor factor (ContainerShell initial rest)) = ContainerFactor factor (ContainerShell (f initial) $ fmap (fmap f) rest)
+    fmap f (ContainerFactor factor (ContainerShellNoExtra rest)) = ContainerFactor factor (ContainerShellNoExtra $ fmap (fmap f) rest)
+
+  instance Bifunctor ContainerFactor where
+    bimap f g (ContainerFactor factor (ContainerShell initial rest)) = ContainerFactor (f factor) (ContainerShell (g initial) $ fmap (fmap g) rest)
+    bimap f g (ContainerFactor factor (ContainerShellNoExtra rest)) = ContainerFactor (f factor) (ContainerShellNoExtra $ fmap (fmap g) rest)
+
+  data ContainerFactorOrNormal a b
+    = ContainerFactorOrNormal a (ContainerShell b (ContainerFactorOrNormalData a b))
+
+  instance Functor (ContainerFactorOrNormal a) where
+    fmap f (ContainerFactorOrNormal factor (ContainerShell initial rest)) = ContainerFactorOrNormal factor (ContainerShell (f initial) $ second f rest)
+    fmap f (ContainerFactorOrNormal factor (ContainerShellNoExtra rest)) = ContainerFactorOrNormal factor (ContainerShellNoExtra $ second f rest)
+
+  instance Bifunctor ContainerFactorOrNormal where
+    bimap f g (ContainerFactorOrNormal factor (ContainerShell initial rest)) = ContainerFactorOrNormal (f factor) (ContainerShell (g initial) $ bimap f g rest)
+    bimap f g (ContainerFactorOrNormal factor (ContainerShellNoExtra rest)) = ContainerFactorOrNormal (f factor) (ContainerShellNoExtra $ bimap f g rest)
+
+  data ContainerFactorOrNormalData a b
+    = ContainerFactorOrNormalDataFactor (Factor b) (ContainerFactorOrNormalData a b)
+    | ContainerFactorOrNormalDataNormal (Normal a b) (ContainerFactorOrNormalData a b)
+    | ContainerFactorOrNormalDataFactorToNormalSwitch (Factor b) (NonEmpty (Normal a b))
+    | ContainerFactorOrNormalDataNormalToFactorSwitch (Normal a b) (NonEmpty (Factor b))
+    deriving Functor
+
+  instance Bifunctor ContainerFactorOrNormalData where
+    bimap f g (ContainerFactorOrNormalDataFactor factor rest) = ContainerFactorOrNormalDataFactor (fmap g factor) $ bimap f g rest
+    bimap f g (ContainerFactorOrNormalDataNormal normal rest) = ContainerFactorOrNormalDataNormal (bimap f g normal) $ bimap f g rest
+    bimap f g (ContainerFactorOrNormalDataFactorToNormalSwitch factor nonEmptyNormal) = ContainerFactorOrNormalDataFactorToNormalSwitch (fmap g factor) $ fmap (bimap f g) nonEmptyNormal
+    bimap f g (ContainerFactorOrNormalDataNormalToFactorSwitch normal nonEmptyFactor) = ContainerFactorOrNormalDataNormalToFactorSwitch (bimap f g normal) $ fmap (fmap g) nonEmptyFactor
+
+  data Factor a
+    = Factor a
+    | FactorNoExtra
+    deriving Functor
+
+  data Normal a b
+    = Normal a b
+    | NormalNoExtra a
+    deriving Functor
+
+  instance Bifunctor Normal where
+    bimap f g (Normal a b) = Normal (f a) (g b)
+    bimap f _ (NormalNoExtra a) = NormalNoExtra (f a)
 
   --A let expression that has at least one let binding, which binds a variable to a body, and a final expression that is to be beta reduced by the preceding let bindings.
   data LetExpr dataType finalExpr
@@ -122,40 +141,25 @@ module MyLib.LetExpr (LetExpr(..), ExprText, ExprRef, ExprRefData, ExprRec, Expr
 
   --------------------
 
-  exprTextT
-    :: ExprText
-    -> Text
-  exprTextT (ExprText text) = text
-
-  toExprText
+  textToExprText
     :: Text
     -> ExprText
-  toExprText = ExprText
+  textToExprText = ExprText
 
-  textToVar
-    :: Text
-    -> Var
-  textToVar = Var . TE.encodeUtf8
+  exprTextToText
+    :: ExprText
+    -> Text
+  exprTextToText (ExprText text) = text
 
   bsToVar
     :: ByteString
     -> Var
   bsToVar = Var
 
-  varToText
-    :: Var
-    -> Text
-  varToText (Var bs) = TE.decodeUtf8 bs
-
   varToBS
     :: Var
     -> ByteString
   varToBS (Var bs) = bs
-
-  letBindingVar
-    :: LetBinding a
-    -> Var
-  letBindingVar (LetBinding var _) = var
 
   letBindingValue
     :: LetBinding a
@@ -183,247 +187,38 @@ module MyLib.LetExpr (LetExpr(..), ExprText, ExprRef, ExprRefData, ExprRec, Expr
     :: Semigroup a
     => Container a a
     -> a
-  foldlContainerToList (Container b rest) = b <> foldlContainerDataToList rest
-  foldlContainerToList (ContainerNoInitial rest) = foldlContainerDataToList rest
-  foldlContainerToList (ContainerSingle b) = b
+  foldlContainerToList (Container (ContainerShell b rest)) = b <> foldlContainerDataToList rest
+  foldlContainerToList (Container (ContainerShellNoExtra rest)) = foldlContainerDataToList rest
+  foldlContainerToList (ContainerSingle (ContainerSingleValue b)) = b
 
   foldlContainerDataToList
     :: Semigroup a
     => ContainerData a a
     -> a
-  foldlContainerDataToList (ContainerData a b rest) = a <> b <> foldlContainerDataToList rest
-  foldlContainerDataToList (ContainerDataNoExtra a rest) = a <> foldlContainerDataToList rest
-  foldlContainerDataToList (ContainerDataFinal a b) = a <> b
-  foldlContainerDataToList (ContainerDataFinalNoExtra a) = a
+  foldlContainerDataToList (ContainerData nonEmpty) = fold1 $ fmap normalConcat nonEmpty
 
   containerToList
-    :: Container a a
+    :: Semigroup a
+    => Container a a
     -> NonEmpty a
-  containerToList (Container initial rest) = initial <| containerDataToList rest
-  containerToList (ContainerNoInitial rest) = containerDataToList rest
-  containerToList (ContainerSingle single) = NE.singleton single
+  containerToList (Container (ContainerShell initial rest)) = initial <| containerDataToList rest
+  containerToList (Container (ContainerShellNoExtra rest)) = containerDataToList rest
+  containerToList (ContainerSingle (ContainerSingleValue single)) = NE.singleton single
 
   containerDataToList
-    :: ContainerData a a
+    :: Semigroup a
+    => ContainerData a a
     -> NonEmpty a
-  containerDataToList (ContainerData a b rest) = a <| b <| containerDataToList rest
-  containerDataToList (ContainerDataNoExtra a rest) = a <| containerDataToList rest
-  containerDataToList (ContainerDataFinal a b) = a <| NE.singleton b
-  containerDataToList (ContainerDataFinalNoExtra a) = NE.singleton a
+  containerDataToList (ContainerData nonEmpty) = fmap normalConcat nonEmpty
 
   ------------------
-
-  letBindingTypesToContainer
-    :: LetBindingTypes
-    -> Container Var Text
-  letBindingTypesToContainer (LetBindingNonVar expr) = exprTextToContainer expr
-  letBindingTypesToContainer (LetBindingRef expr) = exprRefToContainer expr
-  letBindingTypesToContainer (LetBindingRec expr) = exprRecToContainer expr
-  letBindingTypesToContainer (LetBindingRefRec expr) = exprRefRecToContainer expr
 
   exprTextToContainer
     :: ExprText
     -> Container a Text
-  exprTextToContainer (ExprText text) = ContainerSingle text
-
-  exprRefToContainer
-    :: ExprRef
-    -> Container Var Text
-  exprRefToContainer (ExprRef text rest) = Container text $ exprRefDataToContainerData rest
-  exprRefToContainer (ExprRefNoText rest) = ContainerNoInitial $ exprRefDataToContainerData rest
-
-  exprRefDataToContainerData
-    :: ExprRefData
-    -> ContainerData Var Text
-  exprRefDataToContainerData (ExprRefData var text rest) = ContainerData var text $ exprRefDataToContainerData rest
-  exprRefDataToContainerData (ExprRefDataNoText var rest) = ContainerDataNoExtra var $ exprRefDataToContainerData rest
-  exprRefDataToContainerData (ExprRefDataFinal var text) = ContainerDataFinal var text
-  exprRefDataToContainerData (ExprRefDataFinalNoText var) = ContainerDataFinalNoExtra var
-
-  exprRecToContainer
-    :: ExprRec
-    -> Container Var Text
-  exprRecToContainer (ExprRec var text rest) = Container text $ exprRecDataToContainerData var rest
-  exprRecToContainer (ExprRecNoText var rest) = ContainerNoInitial $ exprRecDataToContainerData var rest
-
-  exprRecDataToContainerData
-    :: Var
-    -> ExprRecData
-    -> ContainerData Var Text
-  exprRecDataToContainerData var (ExprRecData text rest) = ContainerData var text $ exprRecDataToContainerData var rest
-  exprRecDataToContainerData var (ExprRecDataNoText rest) = ContainerDataNoExtra var $ exprRecDataToContainerData var rest
-  exprRecDataToContainerData var (ExprRecDataFinal text) = ContainerDataFinal var text
-  exprRecDataToContainerData var ExprRecDataFinalNoText = ContainerDataFinalNoExtra var
-
-  exprRefRecToContainer
-    :: ExprRefRec
-    -> Container Var Text
-  exprRefRecToContainer (ExprRefRec var text rest) = Container text $ exprRefRecDataToContainerData var rest
-  exprRefRecToContainer (ExprRefRecNoText var rest) = ContainerNoInitial $ exprRefRecDataToContainerData var rest
-
-  exprRefRecDataToContainerData
-    :: Var
-    -> ExprRefRecData
-    -> ContainerData Var Text
-  exprRefRecDataToContainerData recVar (ExprRefRecRefData var text rest) = ContainerData var text $ exprRefRecDataToContainerData recVar rest
-  exprRefRecDataToContainerData recVar (ExprRefRecRefDataNoText var rest) = ContainerDataNoExtra var $ exprRefRecDataToContainerData recVar rest
-  exprRefRecDataToContainerData recVar (ExprRefRecRecData text rest) = ContainerData recVar text $ exprRefRecDataToContainerData recVar rest
-  exprRefRecDataToContainerData recVar (ExprRefRecRecDataNoText rest) = ContainerDataNoExtra recVar $ exprRefRecDataToContainerData recVar rest
-  exprRefRecDataToContainerData recVar (ExprRefRecRefDataSwitch var text rest) = ContainerData var text $ exprRecDataToContainerData recVar rest
-  exprRefRecDataToContainerData recVar (ExprRefRecRefDataSwitchNoText var rest) = ContainerDataNoExtra var $ exprRecDataToContainerData recVar rest
-  exprRefRecDataToContainerData recVar (ExprRefRecRecDataSwitch text rest) = ContainerData recVar text $ exprRefDataToContainerData rest
-  exprRefRecDataToContainerData recVar (ExprRefRecRecDataSwitchNoText rest) = ContainerDataNoExtra recVar $ exprRefDataToContainerData rest
+  exprTextToContainer (ExprText text) = ContainerSingle (ContainerSingleValue text)
 
  ----------------------------------------------------
-
-  exprRefToLetBindingTypes
-    :: Var
-    -> ExprRef
-    -> LetBindingTypes
-  exprRefToLetBindingTypes var exprRef@(ExprRefNoText rest) = case exprRefDataToLetBindingTypes var rest of
-    Left _ -> LetBindingRef exprRef
-    Right (Left expr) -> LetBindingRec $ ExprRecNoText var expr
-    Right (Right expr) -> LetBindingRefRec $ ExprRefRecNoText var expr
-  exprRefToLetBindingTypes var exprRef@(ExprRef text rest) = case exprRefDataToLetBindingTypes var rest of
-    Left _ -> LetBindingRef exprRef
-    Right (Left expr) -> LetBindingRec $ ExprRec var text expr
-    Right (Right expr) -> LetBindingRefRec $ ExprRefRec var text expr
-
-  exprRefDataToLetBindingTypes
-    :: Var
-    -> ExprRefData
-    -> Either ExprRefData
-              (Either ExprRecData
-                      ExprRefRecData)
-  exprRefDataToLetBindingTypes var (ExprRefDataFinal exprVar exprText) =
-    if var == exprVar
-    then Right . Left $ ExprRecDataFinal exprText
-    else Left $ ExprRefDataFinal exprVar exprText
-  exprRefDataToLetBindingTypes var (ExprRefDataFinalNoText exprVar) =
-    if var == exprVar
-    then Right . Left $ ExprRecDataFinalNoText
-    else Left $ ExprRefDataFinalNoText exprVar
-  exprRefDataToLetBindingTypes var (ExprRefData exprVar exprText rest) =
-    if var == exprVar
-    then case exprRefDataToLetBindingTypes var rest of
-      Left expr -> Right . Right $ ExprRefRecRecDataSwitch exprText expr
-      Right (Left expr) -> Right . Left $ ExprRecData exprText expr
-      Right (Right expr) -> Right . Right $ ExprRefRecRecData exprText expr
-    else case exprRefDataToLetBindingTypes var rest of
-      Left expr -> Left $ ExprRefData exprVar exprText expr
-      Right (Left expr) -> Right . Right $ ExprRefRecRefDataSwitch exprVar exprText expr
-      Right (Right expr) -> Right . Right $ ExprRefRecRefData exprVar exprText expr
-  exprRefDataToLetBindingTypes var (ExprRefDataNoText exprVar rest) =
-    if var == exprVar
-    then case exprRefDataToLetBindingTypes var rest of
-      Left expr -> Right . Right $ ExprRefRecRecDataSwitchNoText expr
-      Right (Left expr) -> Right . Left $ ExprRecDataNoText expr
-      Right (Right expr) -> Right . Right $ ExprRefRecRecDataNoText expr
-    else case exprRefDataToLetBindingTypes var rest of
-      Left expr -> Left $ ExprRefDataNoText exprVar expr
-      Right (Left expr) -> Right . Right $ ExprRefRecRefDataSwitchNoText exprVar expr
-      Right (Right expr) -> Right . Right $ ExprRefRecRefDataNoText exprVar expr
-
-  exprRef
-    :: Text
-    -> (ExprRefData -> ExprRef)
-  exprRef = ExprRef
-
-  exprRefNoText
-    :: ExprRefData
-    -> ExprRef
-  exprRefNoText = ExprRefNoText
-
-  exprRefData
-    :: Var
-    -> Text
-    -> (ExprRefData -> ExprRefData)
-  exprRefData = ExprRefData
-
-  exprRefDataNoText
-    :: Var
-    -> (ExprRefData -> ExprRefData)
-  exprRefDataNoText = ExprRefDataNoText
-
-  exprRefDataFinal
-    :: Var
-    -> Text
-    -> ExprRefData
-  exprRefDataFinal = ExprRefDataFinal
-
-  exprRefDataFinalNoText
-    :: Var
-    -> ExprRefData
-  exprRefDataFinalNoText = ExprRefDataFinalNoText
-
-  container
-    :: b
-    -> (ContainerData a b -> Container a b)
-  container = Container
-
-  containerNoInitial
-    :: ContainerData a b
-    -> Container a b
-  containerNoInitial = ContainerNoInitial
-
-  containerSingle
-    :: b
-    -> Container a b
-  containerSingle = ContainerSingle
-
-  containerData
-    :: a
-    -> b
-    -> (ContainerData a b -> ContainerData a b)
-  containerData = ContainerData
-
-  containerDataNoExtra
-    :: a
-    -> (ContainerData a b -> ContainerData a b)
-  containerDataNoExtra = ContainerDataNoExtra
-
-  containerDataFinal
-    :: a
-    -> b
-    -> ContainerData a b
-  containerDataFinal = ContainerDataFinal
-
-  containerDataFinalNoExtra
-    :: a
-    -> ContainerData a b
-  containerDataFinalNoExtra = ContainerDataFinalNoExtra
-
--------------------------------------------
-
-  --Given a LetExpr, get back either a filtered version of its matching elements or a mapped version.
-  filterMapOrMap
-    :: (a -> Maybe c)
-    -> (a -> d)
-    -> LetExpr a b
-    -> Either
-         (NonEmpty c)
-         (LetExpr d b)
-  filterMapOrMap filterFn mapFn (LetBind (LetBinding var expr) rest) =
-    let
-      prepend
-        :: (a -> Maybe c)
-        -> (NonEmpty c -> NonEmpty c)
-        -> c
-        -> LetExpr a b
-        -> NonEmpty c
-      prepend filterFn' prependFn' single' (LetBind (LetBinding _ expr') rest') = case filterFn' expr' of
-        Nothing -> prepend filterFn' prependFn' single' rest'
-        Just found -> prepend filterFn' (prependFn' . (single' <|)) found rest'
-      prepend filterFn' prependFn' single' (LetBindFinal (LetBinding _ expr') _) = case filterFn' expr' of
-        Nothing -> prependFn' $ NE.singleton single'
-        Just found -> prependFn' $ single' <| NE.singleton found
-    in
-    case filterFn expr of
-      Nothing -> second (LetBind (LetBinding var (mapFn expr))) $ filterMapOrMap filterFn mapFn rest
-      Just found -> Left $ prepend filterFn id found rest
-  filterMapOrMap filterFn mapFn (LetBindFinal (LetBinding var expr) finalExpr) = case filterFn expr of
-    Nothing -> Right $ LetBindFinal (LetBinding var (mapFn expr)) finalExpr
-    Just found -> Left $ NE.singleton found
 
   --Alternate version of filterMapOrMap where the Left return value is wrapped in a LetBinding
   filterMapOrMapLetBinding
@@ -487,20 +282,63 @@ module MyLib.LetExpr (LetExpr(..), ExprText, ExprRef, ExprRefData, ExprRec, Expr
     -> a
   letBindingCaseVarBS fn (LetBinding (Var bs) _) = fn bs
 
-  letBindingCaseVarExpr
-    :: (Var -> b -> a)
-    -> LetBinding b
-    -> a
-  letBindingCaseVarExpr fn (LetBinding var expr) = fn var expr
+  ------
 
-  letBindingCaseVarBSExpr
-    :: (ByteString -> b -> a)
-    -> LetBinding b
-    -> a
-  letBindingCaseVarBSExpr fn (LetBinding (Var bs) expr) = fn bs expr
+  factorToNormal
+    :: a
+    -> Factor b
+    -> Normal a b
+  factorToNormal a (Factor b) = Normal a b
+  factorToNormal a FactorNoExtra = NormalNoExtra a
 
-  setLetBindingValue
-    :: b
-    -> LetBinding a
-    -> LetBinding b
-  setLetBindingValue value (LetBinding var _) = LetBinding var value
+  normalConcat
+    :: Semigroup a
+    => Normal a a
+    -> a
+  normalConcat (Normal a b) = a <> b
+  normalConcat (NormalNoExtra a) = a
+
+  prependContainerData
+    :: Normal a b
+    -> ContainerData a b
+    -> ContainerData a b
+  prependContainerData normal (ContainerData current) = ContainerData $ normal <| current
+
+  normalToContainerData
+    :: Normal a b
+    -> ContainerData a b
+  normalToContainerData = ContainerData . NE.singleton
+
+  containerFactorToContainer
+    :: ContainerFactor a b
+    -> Container a b
+  containerFactorToContainer (ContainerFactor factor (ContainerShell initial rest)) = Container . ContainerShell initial . ContainerData $ fmap (factorToNormal factor) rest
+  containerFactorToContainer (ContainerFactor factor (ContainerShellNoExtra rest)) = Container . ContainerShellNoExtra . ContainerData $ fmap (factorToNormal factor) rest
+
+  containerNormalToContainer
+    :: ContainerNormal a b
+    -> Container a b
+  containerNormalToContainer (ContainerNormal rest) = Container rest
+
+  containerFactorOrNormalToContainer
+    :: ContainerFactorOrNormal a b
+    -> Container a b
+  containerFactorOrNormalToContainer (ContainerFactorOrNormal factor (ContainerShell initial rest)) = Container (ContainerShell initial $ containerFactorOrNormalDataToContainerData factor rest)
+  containerFactorOrNormalToContainer (ContainerFactorOrNormal factor (ContainerShellNoExtra rest)) = Container (ContainerShellNoExtra $ containerFactorOrNormalDataToContainerData factor rest)
+
+  containerFactorOrNormalDataToContainerData
+    :: a
+    -> ContainerFactorOrNormalData a b
+    -> ContainerData a b
+  containerFactorOrNormalDataToContainerData factor (ContainerFactorOrNormalDataFactor factorValue rest) = prependContainerData (factorToNormal factor factorValue) $ containerFactorOrNormalDataToContainerData factor rest
+  containerFactorOrNormalDataToContainerData factor (ContainerFactorOrNormalDataNormal normalValue rest) = prependContainerData normalValue $ containerFactorOrNormalDataToContainerData factor rest
+  containerFactorOrNormalDataToContainerData factor (ContainerFactorOrNormalDataFactorToNormalSwitch factorValue rest) = ContainerData $ factorToNormal factor factorValue <| rest
+  containerFactorOrNormalDataToContainerData factor (ContainerFactorOrNormalDataNormalToFactorSwitch normalValue rest) = ContainerData $ normalValue <| fmap (factorToNormal factor) rest
+
+  letBindingTypesContainerToContainer
+    :: LetBindingTypesContainer
+    -> Container Var Text
+  letBindingTypesContainerToContainer (LetBindingContainerSingle containerSingle) = ContainerSingle containerSingle
+  letBindingTypesContainerToContainer (LetBindingContainerFactor containerFactor) = containerFactorToContainer containerFactor
+  letBindingTypesContainerToContainer (LetBindingContainerNormal containerNormal) = containerNormalToContainer containerNormal
+  letBindingTypesContainerToContainer (LetBindingContainerFactorOrNormal containerFactorOrNormal) = containerFactorOrNormalToContainer containerFactorOrNormal

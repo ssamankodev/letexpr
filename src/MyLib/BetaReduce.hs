@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
-module MyLib.BetaReduce(betaReduceContainer, leftToContainerText, letExprContainerToFinalContainer, validateRecursionLetBindingTypes, validateLetBindingTypesContainer, identifyVariablesContainer, identifyVariablesInTextContainer, linearUnfoldIndexValuesTrie, mutualUnfoldIndexValuesTrie, validRecursion, getRebinds, eitherValue) where
+module MyLib.BetaReduce(betaReduceContainer, letExprContainerToFinalContainer, validateRecursionLetBindingTypesContainer, validateLetBindingTypesContainer, identifyVariablesContainer, identifyVariablesInTextContainer, linearUnfoldIndexValuesTrie, mutualUnfoldIndexValuesTrie, getRebinds, eitherValue) where
 
   import MyLib.LetExpr
   import Data.List.NonEmpty (NonEmpty)
@@ -30,11 +30,6 @@ module MyLib.BetaReduce(betaReduceContainer, leftToContainerText, letExprContain
     -> NonEmpty Text
   betaReduceContainer containerObj arr = foldlContainerToList $ bimap (\index -> betaReduceContainer (arr DA.! index) arr) NE.singleton containerObj
 
-  leftToContainerText
-    :: (a, Container (b, Text) Text)
-    -> Container b Text
-  leftToContainerText = first fst . snd
-
   letExprContainerToFinalContainer
     :: LetExpr a b
     -> (b, Array Int a)
@@ -51,14 +46,14 @@ module MyLib.BetaReduce(betaReduceContainer, leftToContainerText, letExprContain
     case go 0 [] letExpr of
       (finalContainer, highestIndex, accumAssocs) -> (finalContainer, DA.array (0, highestIndex) accumAssocs)
 
-  validateRecursionLetBindingTypes
-    :: forall b c . LetExpr (Either (Valid LetBindingTypes, Container c Text) ExprText) b
-    -> Either (NonEmpty (LetBinding LetBindingTypes)) (LetExpr (Container c Text) b)
-  validateRecursionLetBindingTypes letExpr =
+  validateRecursionLetBindingTypesContainer
+    :: forall b c . LetExpr (Either (Valid LetBindingTypesContainer, Container c Text) ExprText) b
+    -> Either (NonEmpty (LetBinding LetBindingTypesContainer)) (LetExpr (Container c Text) b)
+  validateRecursionLetBindingTypesContainer letExpr =
     let
       filterFn
-        :: LetBinding (Either (Valid LetBindingTypes) ExprText)
-        -> Maybe (LetBinding LetBindingTypes)
+        :: LetBinding (Either (Valid LetBindingTypesContainer) ExprText)
+        -> Maybe (LetBinding LetBindingTypesContainer)
       filterFn lb = case letBindingValue lb of
         Left (Invalid lbt) -> Just $ fmap (const lbt) lb
         _ -> Nothing
@@ -66,22 +61,22 @@ module MyLib.BetaReduce(betaReduceContainer, leftToContainerText, letExprContain
     filterMapOrMapLetBinding (filterFn . fmap (first fst)) (eitherValue . bimap snd exprTextToContainer) letExpr
 
   validateLetBindingTypesContainer
-    :: (RecursionAllowance, LetBindingTypes, a, b)
-    -> (Valid LetBindingTypes, a, b)
-  validateLetBindingTypesContainer (recAll, lbt, a, b) = (validRecursion recAll lbt, a, b)
+    :: (RecursionAllowance, LetBindingTypesContainer, a, b)
+    -> (Valid LetBindingTypesContainer, a, b)
+  validateLetBindingTypesContainer (recAll, lbt, a, b) = (validRecursionContainer recAll lbt, a, b)
 
   identifyVariablesContainer
     :: LetBinding (RecursionAllowance, Text, Trie a)
-    -> (RecursionAllowance, LetBindingTypes, Container a Text, Trie a)
+    -> (RecursionAllowance, LetBindingTypesContainer, Container a Text, Trie a)
   identifyVariablesContainer lb = case letBindingValue lb of
     (recAll, expr, trie) -> case identifyVariablesInTextContainer expr trie of
-      Right exprText -> (recAll, LetBindingNonVar exprText, exprTextToContainer exprText, trie)
-      Left (exprRef, container) -> (recAll, letBindingCaseVar exprRefToLetBindingTypes lb exprRef, container, trie)
+      Right exprText -> (recAll, LetBindingContainerSingle (ContainerSingleValue $ exprTextToText exprText), exprTextToContainer exprText, trie)
+      Left (ContainerNormal containerNormal, container) -> (recAll, LetBindingContainerNormal $ ContainerNormal containerNormal, container, trie)
 
   identifyVariablesInTextContainer
     :: Text
     -> Trie a
-    -> Either (ExprRef, Container a Text) ExprText
+    -> Either (ContainerNormal Var Text, Container a Text) ExprText
   identifyVariablesInTextContainer text trie =
     let
       takeUntilMatch :: Trie.Trie a -> ByteString -> Maybe (Text, (Var, a), ByteString)
@@ -98,47 +93,47 @@ module MyLib.BetaReduce(betaReduceContainer, leftToContainerText, letExprContain
           Nothing -> Nothing
           Just (accum', matching', suffix') -> Just (TE.decodeUtf8 $ B.take accum' bs', first bsToVar matching', suffix')
 
-      bsToExprRefDataContainerData :: Trie.Trie a -> Var -> a -> ByteString -> (ExprRefData, ContainerData a Text)
-      bsToExprRefDataContainerData trie' var' value' bs' =
+      bsToContainerData :: Trie.Trie a -> Var -> a -> ByteString -> (ContainerData Var Text, ContainerData a Text)
+      bsToContainerData trie' var' value' bs' =
         if B.null bs'
-        then (exprRefDataFinalNoText var', containerDataFinalNoExtra value')
+        then (normalToContainerData $ NormalNoExtra var', normalToContainerData $ NormalNoExtra value')
         else case takeUntilMatch trie' bs' of
-          Nothing -> (exprRefDataFinal var' $ TE.decodeUtf8 bs', containerDataFinal value' $ TE.decodeUtf8 bs')
-          Just (T.Empty, (match', found'), suffix') -> bimap (exprRefDataNoText var') (containerDataNoExtra value') $ bsToExprRefDataContainerData trie' match' found' suffix'
-          Just (nonEmpty, (match', found'), suffix') -> bimap (exprRefData var' nonEmpty) (containerData value' nonEmpty) $ bsToExprRefDataContainerData trie' match' found' suffix'
+          Nothing -> (normalToContainerData . Normal var' $ TE.decodeUtf8 bs', normalToContainerData . Normal value' $ TE.decodeUtf8 bs')
+          Just (T.Empty, (match', found'), suffix') -> bimap (prependContainerData (NormalNoExtra var')) (prependContainerData (NormalNoExtra value')) $ bsToContainerData trie' match' found' suffix'
+          Just (nonEmpty, (match', found'), suffix') -> bimap (prependContainerData (Normal var' nonEmpty)) (prependContainerData (Normal value' nonEmpty)) $ bsToContainerData trie' match' found' suffix'
     in
     case takeUntilMatch trie $ TE.encodeUtf8 text of
-      Nothing -> Right $ toExprText text
-      Just (T.Empty, (match, value), suffix) -> Left . bimap (exprRefNoText) (containerNoInitial) $ bsToExprRefDataContainerData trie match value suffix
-      Just (nonEmpty, (match, value), suffix) -> Left . bimap (exprRef nonEmpty) (container nonEmpty) $ bsToExprRefDataContainerData trie match value suffix
+      Nothing -> Right $ textToExprText text
+      Just (T.Empty, (match, value), suffix) -> Left . bimap (ContainerNormal . ContainerShellNoExtra) (Container . ContainerShellNoExtra) $ bsToContainerData trie match value suffix
+      Just (nonEmpty, (match, value), suffix) -> Left . bimap (ContainerNormal . ContainerShell nonEmpty) (Container . ContainerShell nonEmpty) $ bsToContainerData trie match value suffix
 
   linearUnfoldIndexValuesTrie
     :: LetExpr (Either (RecursionAllowance, Text) Text) Text
     -> Either
          (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Either (Int, Text) (NonEmpty (Int, Text))))
-                  (Either (ExprRef, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText))
+                  (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText))
          (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Int, Text))
-                  (Either (ExprRef, Container (Int, Text) Text) ExprText))
+                  (Either (ContainerNormal Var Text, Container (Int, Text) Text) ExprText))
   linearUnfoldIndexValuesTrie =
     let
       go
         :: Int
         -> Trie (Either (Int, Text) (NonEmpty (Int, Text)))
         -> (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Either (Int, Text) (NonEmpty (Int, Text))))
-                    (Either (ExprRef, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText)
+                    (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText)
             -> LetExpr (Either (RecursionAllowance, Text) Text, Trie (Either (Int, Text) (NonEmpty (Int, Text))))
-                       (Either (ExprRef, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText))
+                       (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText))
         -> Trie (Int, Text)
         -> (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Int, Text))
-                    (Either (ExprRef, Container (Int, Text) Text) ExprText)
+                    (Either (ContainerNormal Var Text, Container (Int, Text) Text) ExprText)
             -> LetExpr (Either (RecursionAllowance, Text) Text, Trie (Int, Text))
-                       (Either (ExprRef, Container (Int, Text) Text) ExprText))
+                       (Either (ContainerNormal Var Text, Container (Int, Text) Text) ExprText))
         -> LetExpr (Either (RecursionAllowance, Text) Text) Text
         -> Either
              (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Either (Int, Text) (NonEmpty (Int, Text))))
-                      (Either (ExprRef, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText))
+                      (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText))
              (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Int, Text))
-                      (Either (ExprRef, Container (Int, Text) Text) ExprText))
+                      (Either (ContainerNormal Var Text, Container (Int, Text) Text) ExprText))
       go index rebindTrie rebindPrepend noRebindTrie noRebindPrepend curr@(LetBind lb rest) =
         let
           updatedNoRebindTrie = letBindingCaseVarBS Trie.insert lb (index, eitherValue . first snd $ letBindingValue lb) noRebindTrie
@@ -168,7 +163,7 @@ module MyLib.BetaReduce(betaReduceContainer, leftToContainerText, letExprContain
         -> Trie (Either (Int, Text) (NonEmpty (Int, Text)))
         -> LetExpr (Either (RecursionAllowance, Text) Text) Text
         -> LetExpr (Either (RecursionAllowance, Text) Text, Trie (Either (Int, Text) (NonEmpty (Int, Text))))
-                   (Either (ExprRef, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText)
+                   (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText)
       goRebind index trie (LetBind lb rest) =
         let
           updatedTrie = insertOrPrepend trie $ fmap ((index,) . eitherValue . first snd) lb
@@ -182,7 +177,7 @@ module MyLib.BetaReduce(betaReduceContainer, leftToContainerText, letExprContain
 
       insertOrPrepend
         :: forall a
-         . Trie (Either a (NonEmpty a))
+        .  Trie (Either a (NonEmpty a))
         -> LetBinding a
         -> Trie (Either a (NonEmpty a))
       insertOrPrepend trie lb =
@@ -204,7 +199,7 @@ module MyLib.BetaReduce(betaReduceContainer, leftToContainerText, letExprContain
     -> Either
          [LetBinding (NonEmpty (Int, Text))]
          (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Int, Text))
-                  (Either (ExprRef, Container (Int, Text) Text) ExprText))
+                  (Either (ContainerNormal Var Text, Container (Int, Text) Text) ExprText))
   mutualUnfoldIndexValuesTrie letExpr =
     let
       foldFn
@@ -242,16 +237,16 @@ module MyLib.BetaReduce(betaReduceContainer, leftToContainerText, letExprContain
   eitherValue (Left a) = a
   eitherValue (Right a) = a
 
-  validRecursion
+  validRecursionContainer
     :: RecursionAllowance
-    -> LetBindingTypes
-    -> Valid LetBindingTypes
-  validRecursion Prohibit lbt@(LetBindingNonVar _) = Valid lbt
-  validRecursion Prohibit lbt@(LetBindingRef _) = Valid lbt
-  validRecursion Prohibit lbt = Invalid lbt
-  validRecursion Permit   lbt@(LetBindingNonVar _) = ValidInexact lbt
-  validRecursion Permit   lbt@(LetBindingRef _) = ValidInexact lbt
-  validRecursion Permit   lbt = Valid lbt
+    -> LetBindingTypesContainer
+    -> Valid LetBindingTypesContainer
+  validRecursionContainer Prohibit lbt@(LetBindingContainerSingle _) = Valid lbt
+  validRecursionContainer Prohibit lbt@(LetBindingContainerNormal _) = Valid lbt
+  validRecursionContainer Prohibit lbt = Invalid lbt
+  validRecursionContainer Permit lbt@(LetBindingContainerSingle _) = ValidInexact lbt
+  validRecursionContainer Permit lbt@(LetBindingContainerNormal _) = ValidInexact lbt
+  validRecursionContainer Permit lbt = Valid lbt
 
   --Given a Trie of rebinds, return LetBinding's where the Var is the Text-ified key and the value is the NonEmpty ExprText that were assigned to the same variable.
   getRebinds

@@ -1,21 +1,12 @@
-{-#LANGUAGE NoImplicitPrelude#-}
 {-#LANGUAGE TypeApplications#-}
 
 module MyLib.CLIParser (CLIParserBundle, cliParserBundle, parserResult, Switches(..), CLI(..), SwitchRebind(..)) where
 
-  import Prelude (undefined, (++))
-  import System.IO (IO, getContents, getContents', hGetLine, stdin)
+  import System.IO (stdin)
   import System.Environment (getArgs)
   import Data.Text (Text)
-  import qualified Data.Text as T
-  import Data.Functor
   import Data.List (singleton)
-  import Options.Applicative (ParserInfo(..), ParserPrefs(..), Parser(..), InfoMod(..), defaultPrefs, execParserPure, handleParseResult, liftA2, flag, long, short, help, (<*>), switch, some, info, strArgument, fullDesc, briefDesc, noIntersperse, (<|>), pure, switch, value)
-  import MyLib.LetExpr
-  import Data.Bool(Bool(..), not)
-  import Data.Function(($), (.))
-  import Data.Semigroup
-  import Control.Monad
+  import Options.Applicative (ParserInfo(..), ParserPrefs(..), Parser, InfoMod, defaultPrefs, execParserPure, handleParseResult, long, help, some, info, strArgument, fullDesc, briefDesc, noIntersperse, switch)
   import HsShellScript (isatty)
 
 
@@ -117,17 +108,6 @@ module MyLib.CLIParser (CLIParserBundle, cliParserBundle, parserResult, Switches
   switchesP :: Parser Switches
   switchesP = Switches
     <$> rebindSwitchP
-
-  {-
-  This is a Parser that parses only one of 'reference' flags: none ("--no-reference").
-  -}
-  referenceSwitchP :: Parser Bool
-  referenceSwitchP =
-    let
-      switchNone = switch $
-           long "no-reference"
-        <> help "Let expressions cannot reference each other and can only be referenced by the final expression"
-    in switchNone
 
   rebindSwitchP :: Parser SwitchRebind
   rebindSwitchP = fmap SwitchRebind . switch $

@@ -5,6 +5,7 @@
 module MyLib.CLIToLetExpr(linearReferenceLetExprParse, mutualReferenceLetExprParse) where
 
   import Data.Text (Text)
+  import Data.Text.Encoding as TE
   import MyLib.LetExpr
 
   data Tokens
@@ -44,17 +45,6 @@ module MyLib.CLIToLetExpr(linearReferenceLetExprParse, mutualReferenceLetExprPar
     | chunk == "in"  = In               : tokenize rest
     | otherwise      = NonKeyWord chunk : tokenize rest
 
-  inverseTokenize :: [Tokens] -> [Text]
-  inverseTokenize [] = []
-  inverseTokenize (Let:rest) = "let" : inverseTokenize rest
-  inverseTokenize (Rec:rest) = "rec" : inverseTokenize rest
-  inverseTokenize (Raw:rest) = "raw" : inverseTokenize rest
-  inverseTokenize (LetRaw:rest) = "let" : "raw" : inverseTokenize rest
-  inverseTokenize (LetRec:rest) = "let" : "rec" : inverseTokenize rest
-  inverseTokenize (Equals:rest) = "=" : inverseTokenize rest
-  inverseTokenize (In:rest) = "in" : inverseTokenize rest
-  inverseTokenize (NonKeyWord chunk:rest) = chunk : inverseTokenize rest
-
   multiTokenize :: [Text] -> [MultiTokens]
   multiTokenize [] = []
   multiTokenize (chunk:rest)
@@ -69,33 +59,24 @@ module MyLib.CLIToLetExpr(linearReferenceLetExprParse, mutualReferenceLetExprPar
   letBindingTextVar
     :: Text
     -> (a -> LetBinding a)
-  letBindingTextVar text = letBinding (textToVar text)
-
-  recLet :: LetBinding a -> LetBinding (Either (RecursionAllowance, a) b)
-  recLet = fmap (Left . (Permit,))
-
-  regLet :: LetBinding a -> LetBinding (Either (RecursionAllowance, a) b)
-  regLet = fmap (Left . (Prohibit,))
-
-  rawLet :: LetBinding Text -> LetBinding (Either a Text)
-  rawLet = fmap Right
+  letBindingTextVar text = letBinding (bsToVar $ TE.encodeUtf8 text)
 
   linearReferenceLetExprParse :: [Text] -> Maybe (LetExpr (Either (RecursionAllowance, Text) Text) Text)
   linearReferenceLetExprParse = linearReferenceLetExprTokens . tokenize
 
   linearReferenceLetExprTokens :: [Tokens] -> Maybe (LetExpr (Either (RecursionAllowance, Text) Text) Text)
   linearReferenceLetExprTokens [Let, NonKeyWord var , Equals, NonKeyWord body, In, NonKeyWord finalExpression] =
-    Just $ letExprLetBindFinal (regLet $ letBindingTextVar var body) finalExpression
+    Just $ letExprLetBindFinal (letBindingTextVar var (Left (Prohibit, body))) finalExpression
   linearReferenceLetExprTokens [LetRec, NonKeyWord var, Equals, NonKeyWord body, In, NonKeyWord finalExpression] =
-    Just $ letExprLetBindFinal (recLet $ letBindingTextVar var body) finalExpression
+    Just $ letExprLetBindFinal (letBindingTextVar var (Left (Permit, body))) finalExpression
   linearReferenceLetExprTokens [LetRaw, NonKeyWord var, Equals, NonKeyWord body, In, NonKeyWord finalExpression] =
-    Just $ letExprLetBindFinal (rawLet $ letBindingTextVar var body) finalExpression
+    Just $ letExprLetBindFinal (letBindingTextVar var (Right body)) finalExpression
   linearReferenceLetExprTokens (LetRec : NonKeyWord var : Equals : NonKeyWord body : In : rest) =
-    letExprLetBind (recLet $ letBindingTextVar var body) <$> linearReferenceLetExprTokens rest
+    letExprLetBind (letBindingTextVar var (Left (Permit, body))) <$> linearReferenceLetExprTokens rest
   linearReferenceLetExprTokens (Let : NonKeyWord var : Equals : NonKeyWord body : In : rest) =
-    letExprLetBind (regLet $ letBindingTextVar var body) <$> linearReferenceLetExprTokens rest
+    letExprLetBind (letBindingTextVar var (Left (Prohibit, body))) <$> linearReferenceLetExprTokens rest
   linearReferenceLetExprTokens (LetRaw : NonKeyWord var : Equals : NonKeyWord body : In : rest) =
-    letExprLetBind (rawLet $ letBindingTextVar var body) <$> linearReferenceLetExprTokens rest
+    letExprLetBind (letBindingTextVar var (Right body)) <$> linearReferenceLetExprTokens rest
   linearReferenceLetExprTokens _ = Nothing
 
   mutualReferenceLetExprParse :: [Text] -> Maybe (LetExpr (Either (RecursionAllowance, Text) Text) Text)
@@ -105,15 +86,15 @@ module MyLib.CLIToLetExpr(linearReferenceLetExprParse, mutualReferenceLetExprPar
 
   mutualReferenceLetExprMultiTokens :: [MultiTokens] -> Maybe (LetExpr (Either (RecursionAllowance, Text) Text) Text)
   mutualReferenceLetExprMultiTokens [MRaw, MNonKeyWord var, MEquals, MNonKeyWord body, MIn, MNonKeyWord finalExpression] =
-    Just $ letExprLetBindFinal (rawLet $ letBindingTextVar var body) finalExpression
+    Just $ letExprLetBindFinal (letBindingTextVar var (Right body)) finalExpression
   mutualReferenceLetExprMultiTokens [MRec, MNonKeyWord var, MEquals, MNonKeyWord body, MIn, MNonKeyWord finalExpression] =
-    Just $ letExprLetBindFinal (recLet $ letBindingTextVar var body) finalExpression
+    Just $ letExprLetBindFinal (letBindingTextVar var (Left (Permit, body))) finalExpression
   mutualReferenceLetExprMultiTokens [MNonKeyWord var, MEquals, MNonKeyWord body, MIn, MNonKeyWord finalExpression] =
-    Just $ letExprLetBindFinal (regLet $ letBindingTextVar var body) finalExpression
+    Just $ letExprLetBindFinal (letBindingTextVar var (Left (Prohibit, body))) finalExpression
   mutualReferenceLetExprMultiTokens (MRec : MNonKeyWord var : MEquals : MNonKeyWord body : MComma : rest) =
-    letExprLetBind (recLet $ letBindingTextVar var body) <$> mutualReferenceLetExprMultiTokens rest
+    letExprLetBind (letBindingTextVar var (Left (Permit, body))) <$> mutualReferenceLetExprMultiTokens rest
   mutualReferenceLetExprMultiTokens (MNonKeyWord var : MEquals : MNonKeyWord body : MComma : rest) =
-    letExprLetBind (regLet $ letBindingTextVar var body) <$> mutualReferenceLetExprMultiTokens rest
+    letExprLetBind (letBindingTextVar var (Left (Prohibit, body))) <$> mutualReferenceLetExprMultiTokens rest
   mutualReferenceLetExprMultiTokens (MRaw : MNonKeyWord var : MEquals : MNonKeyWord body : MComma : rest) =
-    letExprLetBind (rawLet $ letBindingTextVar var body) <$> mutualReferenceLetExprMultiTokens rest
+    letExprLetBind (letBindingTextVar var (Right body)) <$> mutualReferenceLetExprMultiTokens rest
   mutualReferenceLetExprMultiTokens _ = Nothing

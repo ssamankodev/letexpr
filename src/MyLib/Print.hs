@@ -5,6 +5,7 @@ module MyLib.Print(invalidRebindMessage, variableUnderline, exprRecInvalidRecurs
   import MyLib.LetExpr
   import Data.Text(Text)
   import qualified Data.Text as T
+  import qualified Data.Text.Encoding as TE
   import Data.List.NonEmpty
   import Data.Bifunctor
   import Data.Foldable1
@@ -14,9 +15,9 @@ module MyLib.Print(invalidRebindMessage, variableUnderline, exprRecInvalidRecurs
 -- ------------------
 
   variableUnderline
-    :: LetBindingTypes
+    :: LetBindingTypesContainer
     -> Text
-  variableUnderline expr = fold1 . containerVariableUnderline $ letBindingTypesToContainer expr
+  variableUnderline expr = fold1 . containerVariableUnderline $ letBindingTypesContainerToContainer expr
 
   containerVariableUnderline
     :: Container Var Text
@@ -32,10 +33,19 @@ module MyLib.Print(invalidRebindMessage, variableUnderline, exprRecInvalidRecurs
     :: LetBinding (NonEmpty Text)
     -> NonEmpty Text
   letBindingRebindsMessage lb =
-    ("Variable '" <> varToText (letBindingVar lb) <> "' was bound to the following definitions, in order of recency:")
+    ("Variable '" <> letBindingCaseVarBS TE.decodeUtf8 lb <> "' was bound to the following definitions, in order of recency:")
     <| fmap (T.unfoldrN 4 (\x -> Just (' ', x)) () <>) (letBindingValue lb)
 
   invalidRebindMessage
     :: [LetBinding (NonEmpty Text)]
     -> [NonEmpty Text]
   invalidRebindMessage = fmap letBindingRebindsMessage
+
+-- --------------------
+-- | Helper functions |
+-- --------------------
+
+  varToText
+    :: Var
+    -> Text
+  varToText = TE.decodeUtf8 . varToBS
