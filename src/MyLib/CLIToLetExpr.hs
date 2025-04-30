@@ -4,9 +4,11 @@
 
 module MyLib.CLIToLetExpr(linearReferenceLetExprParse, mutualReferenceLetExprParse) where
 
+  import Data.Bifunctor
   import Data.Text (Text)
   import Data.Text.Encoding as TE
   import MyLib.LetExpr
+  import MyLib.BetaReduce
 
   data Tokens
     = Let
@@ -56,45 +58,43 @@ module MyLib.CLIToLetExpr(linearReferenceLetExprParse, mutualReferenceLetExprPar
     | chunk == ","   = MComma            : multiTokenize rest
     | otherwise      = MNonKeyWord chunk : multiTokenize rest
 
-  letBindingTextVar
-    :: Text
-    -> (a -> LetBinding a)
-  letBindingTextVar text = letBinding (bsToVar $ TE.encodeUtf8 text)
-
   linearReferenceLetExprParse :: [Text] -> Maybe (LetExpr (Either (RecursionAllowance, Text) Text) Text)
   linearReferenceLetExprParse = linearReferenceLetExprTokens . tokenize
 
   linearReferenceLetExprTokens :: [Tokens] -> Maybe (LetExpr (Either (RecursionAllowance, Text) Text) Text)
-  linearReferenceLetExprTokens [Let, NonKeyWord var , Equals, NonKeyWord body, In, NonKeyWord finalExpression] =
-    Just $ letExprLetBindFinal (letBindingTextVar var (Left (Prohibit, body))) finalExpression
-  linearReferenceLetExprTokens [LetRec, NonKeyWord var, Equals, NonKeyWord body, In, NonKeyWord finalExpression] =
-    Just $ letExprLetBindFinal (letBindingTextVar var (Left (Permit, body))) finalExpression
-  linearReferenceLetExprTokens [LetRaw, NonKeyWord var, Equals, NonKeyWord body, In, NonKeyWord finalExpression] =
-    Just $ letExprLetBindFinal (letBindingTextVar var (Right body)) finalExpression
-  linearReferenceLetExprTokens (LetRec : NonKeyWord var : Equals : NonKeyWord body : In : rest) =
-    letExprLetBind (letBindingTextVar var (Left (Permit, body))) <$> linearReferenceLetExprTokens rest
-  linearReferenceLetExprTokens (Let : NonKeyWord var : Equals : NonKeyWord body : In : rest) =
-    letExprLetBind (letBindingTextVar var (Left (Prohibit, body))) <$> linearReferenceLetExprTokens rest
-  linearReferenceLetExprTokens (LetRaw : NonKeyWord var : Equals : NonKeyWord body : In : rest) =
-    letExprLetBind (letBindingTextVar var (Right body)) <$> linearReferenceLetExprTokens rest
-  linearReferenceLetExprTokens _ = Nothing
+  linearReferenceLetExprTokens tokens = case maybeLinearReferenceLetBindingTypeParse tokens of
+    Just (lb, [In , NonKeyWord finalExpression]) -> Just $ letExpr lb finalExpression
+    Just (lb, In : following) -> prependLetExpr lb <$> linearReferenceLetExprTokens following
+    Just _ -> Nothing
+    Nothing -> Nothing
+
+  maybeLinearReferenceLetBindingTypeParse :: [Tokens] -> Maybe (LetBinding (Either (RecursionAllowance, Text) Text), [Tokens])
+  maybeLinearReferenceLetBindingTypeParse (Let : rest) =  first (fmap (Left . (Prohibit,))) <$> maybeLinearReferenceLetExprParse rest
+  maybeLinearReferenceLetBindingTypeParse (LetRec : rest) =  first (fmap (Left . (Permit,))) <$> maybeLinearReferenceLetExprParse rest
+  maybeLinearReferenceLetBindingTypeParse (LetRaw : rest) =  first (fmap Right) <$> maybeLinearReferenceLetExprParse rest
+  maybeLinearReferenceLetBindingTypeParse _ = Nothing
+
+  maybeLinearReferenceLetExprParse :: [Tokens] -> Maybe (LetBinding Text, [Tokens])
+  maybeLinearReferenceLetExprParse (NonKeyWord var : Equals : NonKeyWord body : rest) = Just (letBindingBS (TE.encodeUtf8 var) body, rest)
+  maybeLinearReferenceLetExprParse _ = Nothing
 
   mutualReferenceLetExprParse :: [Text] -> Maybe (LetExpr (Either (RecursionAllowance, Text) Text) Text)
   mutualReferenceLetExprParse chunks = case multiTokenize chunks of
     (MLet : rest) -> mutualReferenceLetExprMultiTokens rest
     _ -> Nothing
 
+  maybeMutualReferenceLetBindingTypeParse :: [MultiTokens] -> Maybe (LetBinding (Either (RecursionAllowance, Text) Text), [MultiTokens])
+  maybeMutualReferenceLetBindingTypeParse (MRec : rest) =  first (fmap (Left . (Permit,))) <$> maybeMutualReferenceLetExprParse rest
+  maybeMutualReferenceLetBindingTypeParse (MRaw : rest) =  first (fmap Right) <$> maybeMutualReferenceLetExprParse rest
+  maybeMutualReferenceLetBindingTypeParse rest =  first (fmap (Left . (Prohibit,))) <$> maybeMutualReferenceLetExprParse rest
+
+  maybeMutualReferenceLetExprParse :: [MultiTokens] -> Maybe (LetBinding Text, [MultiTokens])
+  maybeMutualReferenceLetExprParse (MNonKeyWord var : MEquals : MNonKeyWord body : rest) = Just (letBindingBS (TE.encodeUtf8 var) body, rest)
+  maybeMutualReferenceLetExprParse _ = Nothing
+
   mutualReferenceLetExprMultiTokens :: [MultiTokens] -> Maybe (LetExpr (Either (RecursionAllowance, Text) Text) Text)
-  mutualReferenceLetExprMultiTokens [MRaw, MNonKeyWord var, MEquals, MNonKeyWord body, MIn, MNonKeyWord finalExpression] =
-    Just $ letExprLetBindFinal (letBindingTextVar var (Right body)) finalExpression
-  mutualReferenceLetExprMultiTokens [MRec, MNonKeyWord var, MEquals, MNonKeyWord body, MIn, MNonKeyWord finalExpression] =
-    Just $ letExprLetBindFinal (letBindingTextVar var (Left (Permit, body))) finalExpression
-  mutualReferenceLetExprMultiTokens [MNonKeyWord var, MEquals, MNonKeyWord body, MIn, MNonKeyWord finalExpression] =
-    Just $ letExprLetBindFinal (letBindingTextVar var (Left (Prohibit, body))) finalExpression
-  mutualReferenceLetExprMultiTokens (MRec : MNonKeyWord var : MEquals : MNonKeyWord body : MComma : rest) =
-    letExprLetBind (letBindingTextVar var (Left (Permit, body))) <$> mutualReferenceLetExprMultiTokens rest
-  mutualReferenceLetExprMultiTokens (MNonKeyWord var : MEquals : MNonKeyWord body : MComma : rest) =
-    letExprLetBind (letBindingTextVar var (Left (Prohibit, body))) <$> mutualReferenceLetExprMultiTokens rest
-  mutualReferenceLetExprMultiTokens (MRaw : MNonKeyWord var : MEquals : MNonKeyWord body : MComma : rest) =
-    letExprLetBind (letBindingTextVar var (Right body)) <$> mutualReferenceLetExprMultiTokens rest
-  mutualReferenceLetExprMultiTokens _ = Nothing
+  mutualReferenceLetExprMultiTokens tokens = case maybeMutualReferenceLetBindingTypeParse tokens of
+    Just (lb, [MIn, MNonKeyWord finalExpression]) -> Just $ letExpr lb finalExpression
+    Just (lb, MComma : following) -> prependLetExpr lb <$> mutualReferenceLetExprMultiTokens following
+    Just _ -> Nothing
+    Nothing -> Nothing

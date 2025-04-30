@@ -1,22 +1,23 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
-module MyLib.BetaReduce(betaReduceContainer, letExprContainerToFinalContainer, validateRecursionLetBindingTypesContainer, validateLetBindingTypesContainer, identifyVariablesContainer, identifyVariablesInTextContainer, linearUnfoldIndexValuesTrie, mutualUnfoldIndexValuesTrie, getRebinds, eitherValue) where
+module MyLib.BetaReduce(RecursionAllowance(..), betaReduceContainer, letExprContainerToFinalContainer, validateRecursionLetBindingTypesContainer, identifyVariablesContainer, identifyVariablesInTextContainer, linearUnfoldIndexValuesTrie, mutualUnfoldIndexValuesTrie, trieLBToLetBindings, eitherValue) where
 
   import MyLib.LetExpr
-  import Data.List.NonEmpty (NonEmpty)
+  import MyLib.Container
+  import Data.List.NonEmpty (NonEmpty(..))
   import qualified Data.List.NonEmpty as NE
-  import Data.List.NonEmpty ((<|))
   import Data.Text (Text)
   import Data.Text.Encoding as TE
   import Data.Array (Array)
   import qualified Data.Array as DA
   import qualified Data.Text as T
-  import Data.Trie (Trie)
-  import qualified Data.Trie as Trie
   import Data.ByteString (ByteString)
   import qualified Data.ByteString as B
   import Data.Bifunctor
+
+  --A data type thar represents whether recursion is permitted in a given instance or not.
+  data RecursionAllowance = Permit | Prohibit
 
   -- Holds a value and prescribes whether it is valid, valid but inexact or redundant, or invalid.
   data Valid a
@@ -33,67 +34,64 @@ module MyLib.BetaReduce(betaReduceContainer, letExprContainerToFinalContainer, v
   letExprContainerToFinalContainer
     :: LetExpr a b
     -> (b, Array Int a)
-  letExprContainerToFinalContainer letExpr =
+  letExprContainerToFinalContainer lb@(LetBind _ finalExpression) =
     let
-      go
-        :: Int
-        -> [(Int, a)]
-        -> LetExpr a b
-        -> (b, Int, [(Int, a)])
-      go accum accumAssocs (LetBind lb rest) = go (accum + 1) ((accum, letBindingValue lb) : accumAssocs) rest
-      go accum accumAssocs (LetBindFinal lb finalContainer) = (finalContainer, accum, (accum, letBindingValue lb) : accumAssocs)
+      indexify :: Int -> NonEmpty a -> ([(Int, a)], Int)
+      indexify index (a :| []) = ([(index, a)], index)
+      indexify index (a :| (next : rest)) = first ((index, a):) $ indexify (index + 1) (next :| rest)
     in
-    case go 0 [] letExpr of
-      (finalContainer, highestIndex, accumAssocs) -> (finalContainer, DA.array (0, highestIndex) accumAssocs)
+    case indexify 0 $ letExprLetBindingValues lb of
+      (indexed, highestIndex) -> (finalExpression, DA.array (0, highestIndex) indexed)
 
   validateRecursionLetBindingTypesContainer
-    :: forall b c . LetExpr (Either (Valid LetBindingTypesContainer, Container c Text) ExprText) b
+    :: forall b c . LetExpr (Either (Valid LetBindingTypesContainer, Container c Text) Text) b
     -> Either (NonEmpty (LetBinding LetBindingTypesContainer)) (LetExpr (Container c Text) b)
-  validateRecursionLetBindingTypesContainer letExpr =
+  validateRecursionLetBindingTypesContainer expr =
     let
       filterFn
-        :: LetBinding (Either (Valid LetBindingTypesContainer) ExprText)
-        -> Maybe (LetBinding LetBindingTypesContainer)
-      filterFn lb = case letBindingValue lb of
-        Left (Invalid lbt) -> Just $ fmap (const lbt) lb
-        _ -> Nothing
+        :: Either (Valid LetBindingTypesContainer) Text
+        -> Maybe LetBindingTypesContainer
+      filterFn (Left (Invalid lbt)) = Just lbt
+      filterFn _ = Nothing
     in
-    filterMapOrMapLetBinding (filterFn . fmap (first fst)) (eitherValue . bimap snd exprTextToContainer) letExpr
-
-  validateLetBindingTypesContainer
-    :: (RecursionAllowance, LetBindingTypesContainer, a, b)
-    -> (Valid LetBindingTypesContainer, a, b)
-  validateLetBindingTypesContainer (recAll, lbt, a, b) = (validRecursionContainer recAll lbt, a, b)
+    filterMapOrMap (filterFn . first fst) (eitherValue . bimap snd (ContainerSingle . ContainerSingleValue)) expr
 
   identifyVariablesContainer
-    :: LetBinding (RecursionAllowance, Text, Trie a)
-    -> (RecursionAllowance, LetBindingTypesContainer, Container a Text, Trie a)
-  identifyVariablesContainer lb = case letBindingValue lb of
-    (recAll, expr, trie) -> case identifyVariablesInTextContainer expr trie of
-      Right exprText -> (recAll, LetBindingContainerSingle (ContainerSingleValue $ exprTextToText exprText), exprTextToContainer exprText, trie)
-      Left (ContainerNormal containerNormal, container) -> (recAll, LetBindingContainerNormal $ ContainerNormal containerNormal, container, trie)
+    :: LetBinding (RecursionAllowance, Text, TrieLB a)
+    -> LetBinding (Valid LetBindingTypesContainer, Container a Text)
+  identifyVariablesContainer lb =
+    let
+      fn
+        :: (RecursionAllowance, Text, TrieLB a)
+        -> Either ((RecursionAllowance, Container Var Text), Container a Text) (Valid LetBindingTypesContainer, Container a Text)
+      fn (recAll, expr, trie) = case identifyVariablesInTextContainer expr trie of
+        Left (containerNormal, container) -> Left ((recAll, containerNormalToContainer containerNormal), container)
+        Right exprText -> Right (validRecursionContainer recAll . LetBindingContainerSingle $ ContainerSingleValue exprText, ContainerSingle (ContainerSingleValue exprText))
+    in
+    fmap eitherValue
+      . eitherLetBindingToLetBindingEither
+      . first (tupleLetBindingToLetBindingTuple
+              . first (fmap (uncurry validRecursionContainer)
+                      . tupleLetBindingToLetBindingTuple
+                      . second containerToLetBindingTypes
+                      . letBindingTupleToTupleLetBinding)
+              . letBindingTupleToTupleLetBinding)
+      . letBindingEitherToEitherLetBinding
+      $ fmap fn lb
 
   identifyVariablesInTextContainer
     :: Text
-    -> Trie a
-    -> Either (ContainerNormal Var Text, Container a Text) ExprText
+    -> TrieLB a
+    -> Either (ContainerNormal Var Text, Container a Text) Text
   identifyVariablesInTextContainer text trie =
     let
-      takeUntilMatch :: Trie.Trie a -> ByteString -> Maybe (Text, (Var, a), ByteString)
+      takeUntilMatch :: TrieLB a -> ByteString -> Maybe (Text, (Var, a), ByteString)
       takeUntilMatch trie' bs' =
-        let
-          go :: Trie a -> ByteString -> Int -> Maybe (Int, (ByteString, a), ByteString)
-          go trie'' bs'' accum'' = case Trie.match trie'' bs'' of
-            Just (match'', value'', suffix'') -> Just (accum'', (match'', value''), suffix'')
-            Nothing -> case fmap snd $ B.uncons bs'' of
-              Just rest'' -> go trie'' rest'' $ accum'' + 1
-              Nothing -> Nothing
-        in
-        case go trie' bs' 0 of
+        case matchTrieLB trie' bs' of
           Nothing -> Nothing
-          Just (accum', matching', suffix') -> Just (TE.decodeUtf8 $ B.take accum' bs', first bsToVar matching', suffix')
+          Just (accum', matching', suffix') -> Just (TE.decodeUtf8 $ B.take accum' bs', first Var matching', suffix')
 
-      bsToContainerData :: Trie.Trie a -> Var -> a -> ByteString -> (ContainerData Var Text, ContainerData a Text)
+      bsToContainerData :: TrieLB a -> Var -> a -> ByteString -> (ContainerData Var Text, ContainerData a Text)
       bsToContainerData trie' var' value' bs' =
         if B.null bs'
         then (normalToContainerData $ NormalNoExtra var', normalToContainerData $ NormalNoExtra value')
@@ -103,139 +101,102 @@ module MyLib.BetaReduce(betaReduceContainer, letExprContainerToFinalContainer, v
           Just (nonEmpty, (match', found'), suffix') -> bimap (prependContainerData (Normal var' nonEmpty)) (prependContainerData (Normal value' nonEmpty)) $ bsToContainerData trie' match' found' suffix'
     in
     case takeUntilMatch trie $ TE.encodeUtf8 text of
-      Nothing -> Right $ textToExprText text
       Just (T.Empty, (match, value), suffix) -> Left . bimap (ContainerNormal . ContainerShellNoExtra) (Container . ContainerShellNoExtra) $ bsToContainerData trie match value suffix
       Just (nonEmpty, (match, value), suffix) -> Left . bimap (ContainerNormal . ContainerShell nonEmpty) (Container . ContainerShell nonEmpty) $ bsToContainerData trie match value suffix
+      Nothing -> Right text
 
   linearUnfoldIndexValuesTrie
     :: LetExpr (Either (RecursionAllowance, Text) Text) Text
     -> Either
-         (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Either (Int, Text) (NonEmpty (Int, Text))))
-                  (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText))
-         (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Int, Text))
-                  (Either (ContainerNormal Var Text, Container (Int, Text) Text) ExprText))
+         (LetExpr (Either (RecursionAllowance, Text) Text, TrieLB (Either (Int, Text) (NonEmpty (Int, Text))))
+                  (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) Text))
+         (LetExpr (Either (RecursionAllowance, Text) Text, TrieLB (Int, Text))
+                  (Either (ContainerNormal Var Text, Container (Int, Text) Text) Text))
   linearUnfoldIndexValuesTrie =
     let
       go
         :: Int
-        -> Trie (Either (Int, Text) (NonEmpty (Int, Text)))
-        -> (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Either (Int, Text) (NonEmpty (Int, Text))))
-                    (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText)
-            -> LetExpr (Either (RecursionAllowance, Text) Text, Trie (Either (Int, Text) (NonEmpty (Int, Text))))
-                       (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText))
-        -> Trie (Int, Text)
-        -> (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Int, Text))
-                    (Either (ContainerNormal Var Text, Container (Int, Text) Text) ExprText)
-            -> LetExpr (Either (RecursionAllowance, Text) Text, Trie (Int, Text))
-                       (Either (ContainerNormal Var Text, Container (Int, Text) Text) ExprText))
+        -> TrieLB (Int, Text)
+        -> TrieLB (Either (Int, Text) (NonEmpty (Int, Text)))
         -> LetExpr (Either (RecursionAllowance, Text) Text) Text
         -> Either
-             (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Either (Int, Text) (NonEmpty (Int, Text))))
-                      (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText))
-             (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Int, Text))
-                      (Either (ContainerNormal Var Text, Container (Int, Text) Text) ExprText))
-      go index rebindTrie rebindPrepend noRebindTrie noRebindPrepend curr@(LetBind lb rest) =
+             (LetExpr (Either (RecursionAllowance, Text) Text, TrieLB (Either (Int, Text) (NonEmpty (Int, Text))))
+                      (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) Text))
+             (LetExpr (Either (RecursionAllowance, Text) Text, TrieLB (Int, Text))
+                      (Either (ContainerNormal Var Text, Container (Int, Text) Text) Text))
+      go index noRebindTrie _ (LetBind (lb :| []) finalExpression) =
+        case insertOrPrependEitherTrieLB (fmap ((index,) . eitherValue . first snd) lb) noRebindTrie of
+          Left updatedNoRebindTrie -> Right $ LetBind (NE.singleton $ fmap (, updatedNoRebindTrie) lb) $ identifyVariablesInTextContainer finalExpression updatedNoRebindTrie
+          Right updatedRebindTrie -> Left $ LetBind (NE.singleton $ fmap (, updatedRebindTrie) lb) $ identifyVariablesInTextContainer finalExpression updatedRebindTrie
+      go index noRebindTrie rebindTrie (LetBind (lb :| (next : rest)) finalExpression) =
         let
-          updatedNoRebindTrie = letBindingCaseVarBS Trie.insert lb (index, eitherValue . first snd $ letBindingValue lb) noRebindTrie
-
-          updatedRebindTrie = insertOrPrepend rebindTrie $ fmap ((index,) . eitherValue . first snd) lb
+          modifiedLB :: LetBinding (Int, Text)
+          modifiedLB = fmap ((index,) . eitherValue . first snd) lb
         in
-        if letBindingCaseVarBS Trie.member lb rebindTrie
-        then Left . rebindPrepend $ goRebind index rebindTrie curr
-        else
-          go
-            (index + 1)
-            updatedRebindTrie
-            (rebindPrepend . LetBind (fmap (, updatedRebindTrie) lb))
-            updatedNoRebindTrie
-            (noRebindPrepend . LetBind (fmap (, updatedNoRebindTrie) lb))
-            rest
-      go index rebindTrie rebindPrepend noRebindTrie noRebindPrepend curr@(LetBindFinal lb text) =
-        let
-          updatedNoRebindTrie = letBindingCaseVarBS Trie.insert lb (index, eitherValue . first snd $ letBindingValue lb) noRebindTrie
-        in
-        if letBindingCaseVarBS Trie.member lb noRebindTrie
-        then Left . rebindPrepend $ goRebind index rebindTrie curr
-        else Right . noRebindPrepend $ LetBindFinal (fmap (, updatedNoRebindTrie) lb) (identifyVariablesInTextContainer text updatedNoRebindTrie)
+        case insertOrPrependEitherTrieLB modifiedLB noRebindTrie of
+          Left updatedNoRebindTrie ->
+            let
+              updatedRebindTrie = insertOrPrependTrieLB modifiedLB rebindTrie
+            in
+            case go (index + 1) updatedNoRebindTrie updatedRebindTrie $ LetBind (next :| rest) finalExpression of
+              Left expr -> Left $ prependLetExpr (fmap (, updatedRebindTrie) lb) expr
+              Right expr -> Right $ prependLetExpr (fmap (, updatedNoRebindTrie) lb) expr
+          Right updatedRebindTrie -> Left . prependLetExpr (fmap (, updatedRebindTrie) lb) . goRebind (index + 1) updatedRebindTrie $ LetBind (next :| rest) finalExpression
 
       goRebind
         :: Int
-        -> Trie (Either (Int, Text) (NonEmpty (Int, Text)))
+        -> TrieLB (Either (Int, Text) (NonEmpty (Int, Text)))
         -> LetExpr (Either (RecursionAllowance, Text) Text) Text
-        -> LetExpr (Either (RecursionAllowance, Text) Text, Trie (Either (Int, Text) (NonEmpty (Int, Text))))
-                   (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) ExprText)
-      goRebind index trie (LetBind lb rest) =
+        -> LetExpr (Either (RecursionAllowance, Text) Text, TrieLB (Either (Int, Text) (NonEmpty (Int, Text))))
+                   (Either (ContainerNormal Var Text, Container (Either (Int, Text) (NonEmpty (Int, Text))) Text) Text)
+      goRebind index trie (LetBind (lb :| []) finalExpression) =
         let
-          updatedTrie = insertOrPrepend trie $ fmap ((index,) . eitherValue . first snd) lb
+          updatedRebindTrie = insertOrPrependTrieLB (fmap ((index,) . eitherValue . first snd) lb) trie
         in
-        LetBind (fmap (, updatedTrie) lb) $ goRebind (index + 1) updatedTrie rest
-      goRebind index trie (LetBindFinal lb text) =
+        letExpr (fmap (, updatedRebindTrie) lb) $ identifyVariablesInTextContainer finalExpression updatedRebindTrie
+      goRebind index trie (LetBind (lb :| (next : rest)) finalExpression) =
         let
-          updatedTrie = insertOrPrepend trie $ fmap ((index,) . eitherValue . first snd) lb
+          updatedRebindTrie = insertOrPrependTrieLB (fmap ((index,) . eitherValue . first snd) lb) trie
         in
-        LetBindFinal (fmap (, updatedTrie) lb) $ identifyVariablesInTextContainer text updatedTrie
-
-      insertOrPrepend
-        :: forall a
-        .  Trie (Either a (NonEmpty a))
-        -> LetBinding a
-        -> Trie (Either a (NonEmpty a))
-      insertOrPrepend trie lb =
-        let
-          innerExpr = letBindingValue lb
-
-          insert :: Either a (NonEmpty a) -> Trie (Either a (NonEmpty a))
-          insert a = letBindingCaseVarBS Trie.insert lb a trie
-        in
-        case letBindingCaseVarBS Trie.lookup lb trie of
-          Nothing ->  insert (Left innerExpr)
-          Just (Left singleExpr) -> insert (Right $ innerExpr <| NE.singleton singleExpr)
-          Just (Right multiExpr) -> insert (Right $ innerExpr <| multiExpr)
+        prependLetExpr (fmap (, updatedRebindTrie) lb) . goRebind (index + 1) updatedRebindTrie $ LetBind (next :| rest) finalExpression
     in
-    go 0 Trie.empty id Trie.empty id
+    go 0 emptyTrieLB emptyTrieLB
 
   mutualUnfoldIndexValuesTrie
     :: LetExpr (Either (RecursionAllowance, Text) Text) Text
     -> Either
          [LetBinding (NonEmpty (Int, Text))]
-         (LetExpr (Either (RecursionAllowance, Text) Text, Trie (Int, Text))
-                  (Either (ContainerNormal Var Text, Container (Int, Text) Text) ExprText))
-  mutualUnfoldIndexValuesTrie letExpr =
+         (LetExpr (Either (RecursionAllowance, Text) Text, TrieLB (Int, Text))
+                  (Either (ContainerNormal Var Text, Container (Int, Text) Text) Text))
+  mutualUnfoldIndexValuesTrie (LetBind nonEmpty finalExpression) =
     let
-      foldFn
-        :: forall a
-        .  (Int, Either (Trie (Int, a)) (Trie (Either (Int, a) (NonEmpty (Int, a)))))
-        -> LetBinding a
-        -> (Int, Either (Trie (Int, a)) (Trie (Either (Int, a) (NonEmpty (Int, a)))))
-      foldFn (index, Left singleTrie) lb =
-        if letBindingCaseVarBS Trie.member lb singleTrie
-        then foldFn (index, Right $ Trie.filterMap (Just . Left) singleTrie) lb
-        else (index + 1, Left $ letBindingCaseVarBS Trie.insert lb (index, letBindingValue lb) singleTrie)
-      foldFn (index, Right multiTrie) lb = second Right $ foldFnMulti (index, multiTrie) lb
+      go
+        :: Int
+        -> TrieLB (Int, Text)
+        -> NonEmpty (LetBinding Text)
+        -> Either (TrieLB (Int, Text)) (TrieLB (Either (Int, Text) (NonEmpty (Int, Text))))
+      go index trie (lb :| []) = insertOrPrependEitherTrieLB (fmap (index,) lb) trie
+      go index trie (lb :| (next : rest)) = case insertOrPrependEitherTrieLB (fmap (index,) lb) trie of
+        Left updatedNoRebindTrie -> go (index + 1) updatedNoRebindTrie (next :| rest)
+        Right updatedRebindTrie -> Right $ goRebind (index + 1) updatedRebindTrie (next :| rest)
 
-      foldFnMulti
-        :: forall a
-        .  (Int, Trie (Either (Int, a) (NonEmpty (Int, a))))
-        -> LetBinding a
-        -> (Int, Trie (Either (Int, a) (NonEmpty (Int, a))))
-      foldFnMulti (index, trie) lb =
-        let
-          lbVal :: (Int, a)
-          lbVal = (index, letBindingValue lb)
-        in
-        (index + 1, flip (letBindingCaseVarBS Trie.insert lb) trie $ case letBindingCaseVarBS Trie.lookup lb trie of
-          Nothing -> Left lbVal
-          Just (Left singleExpr) -> Right $ lbVal <| NE.singleton singleExpr
-          Just (Right multiExpr) -> Right $ lbVal <| multiExpr
-        )
+      goRebind
+        :: Int
+        -> TrieLB (Either (Int, Text) (NonEmpty (Int, Text)))
+        -> NonEmpty (LetBinding Text)
+        -> TrieLB (Either (Int, Text) (NonEmpty (Int, Text)))
+      goRebind index trie (lb :| []) = insertOrPrependTrieLB (fmap (index,) lb) trie
+      goRebind index trie (lb :| (next : rest)) = goRebind (index + 1) (insertOrPrependTrieLB (fmap (index,) lb) trie) (next :| rest)
+
+      getRight
+        :: Either a b
+        -> Maybe b
+      getRight (Right right) = Just right
+      getRight _ = Nothing
     in
-    case snd . foldlLetExpr foldFn (0, Left Trie.empty) $ first (eitherValue . first snd) letExpr of
-      Left singleTrie -> Right $ bimap (, singleTrie) (flip identifyVariablesInTextContainer singleTrie) letExpr
-      Right multiTrie -> Left $ getRebinds multiTrie
-
-  eitherValue :: Either a a -> a
-  eitherValue (Left a) = a
-  eitherValue (Right a) = a
+    case go 0 emptyTrieLB $ fmap (fmap (eitherValue . first snd)) nonEmpty of
+      Left singleTrie -> Right $ LetBind (fmap (fmap (, singleTrie)) nonEmpty) (identifyVariablesInTextContainer finalExpression singleTrie)
+      Right multiTrie -> Left . trieLBToLetBindings $ filterMapTrieLB getRight multiTrie
 
   validRecursionContainer
     :: RecursionAllowance
@@ -248,17 +209,6 @@ module MyLib.BetaReduce(betaReduceContainer, letExprContainerToFinalContainer, v
   validRecursionContainer Permit lbt@(LetBindingContainerNormal _) = ValidInexact lbt
   validRecursionContainer Permit lbt = Valid lbt
 
-  --Given a Trie of rebinds, return LetBinding's where the Var is the Text-ified key and the value is the NonEmpty ExprText that were assigned to the same variable.
-  getRebinds
-    :: Trie (Either a (NonEmpty a))
-    -> [LetBinding (NonEmpty a)]
-  getRebinds trie =
-    let
-      filterFn :: Either a (NonEmpty a) -> Maybe (NonEmpty a)
-      filterFn (Left _) = Nothing
-      filterFn (Right nonEmpty) = Just nonEmpty
-
-      mapFn :: (ByteString, b) -> LetBinding b
-      mapFn (bs, b) = letBinding (bsToVar bs) b
-    in
-    fmap mapFn . Trie.toList $ Trie.filterMap filterFn trie
+  eitherValue :: Either a a -> a
+  eitherValue (Left a) = a
+  eitherValue (Right a) = a

@@ -67,6 +67,7 @@ library
                     , MyLib.CLIToLetExpr
                     , MyLib.BetaReduce
                     , MyLib.Print
+                    , MyLib.Container
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -79,6 +80,7 @@ library
                     , bytestring ^>= 0.12.0.0
                     , bytestring-trie ^>= 0.2.7
                     , array ^>= 0.5.0.0
+                    , queues ^>= 1.0.0
 
     -- Directories containing source files.
     hs-source-dirs:   src
