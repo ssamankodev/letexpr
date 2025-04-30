@@ -10,7 +10,6 @@ module MyLib.Print(invalidRebindMessage, variableUnderline, exprRecInvalidRecurs
   import Data.List.NonEmpty
   import Data.Bifunctor
   import Data.Foldable1
-  import Queue
 
 -- ------------------
 -- | Error Messages |

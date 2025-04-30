@@ -5,7 +5,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
 
-module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letBindingBS, filterMapOrMap, foldlLetExpr, letBindingCaseVar, letBindingCaseVarBS, letBindingCaseVarBSValue, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, printable, printablePrefixed, printableSuffixed, printableInfixed, printableEnqueueFront, printableEnqueueBack, letBindingVarValuePrintable, letBindingVarPrintable, letBindingValuePrintable, printableToList) where
+module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letBindingBS, filterMapOrMap, foldlLetExpr, letBindingCaseVar, letBindingCaseVarBS, letBindingCaseVarBSValue, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, printable, printablePrefixed, printableSuffixed, printableInfixed, printableEnqueueFront, printableEnqueueBack, letBindingVarValuePrintable, letBindingVarPrintable, letBindingValuePrintable, printableToList, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
 
   import Data.List.NonEmpty (NonEmpty(..), (<|))
   import qualified Data.List.NonEmpty as NE
@@ -202,6 +202,17 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letB
     -> LetExpr a c
     -> LetExpr b c
   mapLetBindings fn (LetBind nonEmpty finalExpression) = LetBind (fmap fn nonEmpty) finalExpression
+
+  letBindingNonEmptyToNonEmptyLetBinding
+    :: LetBinding (NonEmpty a)
+    -> NonEmpty (LetBinding a)
+  letBindingNonEmptyToNonEmptyLetBinding (LetBinding var nonEmpty) = fmap (LetBinding var) nonEmpty
+
+  nonEmptyLetBindingToLetBindingNonEmpty
+    :: NonEmpty (LetBinding a)
+    -> LetBinding (NonEmpty a)
+  nonEmptyLetBindingToLetBindingNonEmpty nonEmpty@((LetBinding var _) :| _) =
+    LetBinding var $ fmap (\(LetBinding _ value) -> value) nonEmpty
 
   letBindingEitherToEitherLetBinding
     :: LetBinding (Either a b)
