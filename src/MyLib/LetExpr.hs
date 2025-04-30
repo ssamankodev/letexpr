@@ -5,16 +5,21 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
 
-module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, letBindingBS, filterMapOrMap, foldlLetExpr, letBindingCaseVar, letBindingCaseVarBS, letBindingCaseVarBSValue, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple) where
+module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letBindingBS, filterMapOrMap, foldlLetExpr, letBindingCaseVar, letBindingCaseVarBS, letBindingCaseVarBSValue, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, printable, printablePrefixed, printableSuffixed, printableInfixed, printableEnqueueFront, printableEnqueueBack, letBindingVarValuePrintable, letBindingVarPrintable, letBindingValuePrintable, printableToList) where
 
   import Data.List.NonEmpty (NonEmpty(..), (<|))
   import qualified Data.List.NonEmpty as NE
   import Data.Bifunctor
   import Data.ByteString (ByteString)
   import qualified Data.ByteString as B
+  import Data.Text (Text)
+  import qualified Data.Text as T
+  import qualified Data.Text.Encoding as TE
   import Data.Foldable
   import Data.Trie (Trie)
   import qualified Data.Trie as Trie
+  import Queue (Queue)
+  import qualified Queue as Q
 
   --Is a newtype for Text that represents a variable name
   newtype Var = Var ByteString
@@ -34,6 +39,79 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, letBindingBS, fi
 
   newtype TrieLB a = TrieLB (Trie a)
     deriving Functor
+
+  data Printable a
+    = Printable (Queue a)
+    | PrintablePrefixed a (Queue a)
+    | PrintableSuffixed a (Queue a)
+    | PrintableInfixed a a (Queue a)
+
+  --------------------
+
+  printable
+    :: Printable a
+  printable = Printable Q.empty
+
+  printablePrefixed
+    :: a
+    -> Printable a
+  printablePrefixed a = PrintablePrefixed a Q.empty
+
+  printableSuffixed
+    :: a
+    -> Printable a
+  printableSuffixed a = PrintableSuffixed a Q.empty
+
+  printableInfixed
+    :: a
+    -> a
+    -> Printable a
+  printableInfixed prefix suffix = PrintableInfixed prefix suffix Q.empty
+
+  printableEnqueueFront
+    :: a
+    -> Printable a
+    -> Printable a
+  printableEnqueueFront value (Printable queue) = Printable $ Q.enqueueFront value queue
+  printableEnqueueFront value (PrintablePrefixed a queue) = PrintablePrefixed a $ Q.enqueueFront value queue
+  printableEnqueueFront value (PrintableSuffixed a queue) = PrintableSuffixed a $ Q.enqueueFront value queue
+  printableEnqueueFront value (PrintableInfixed prefix suffix queue) = PrintableInfixed prefix suffix $ Q.enqueueFront value queue
+
+  printableEnqueueBack
+    :: a
+    -> Printable a
+    -> Printable a
+  printableEnqueueBack value (Printable queue) = Printable $ Q.enqueue value queue
+  printableEnqueueBack value (PrintablePrefixed a queue) = PrintablePrefixed a $ Q.enqueue value queue
+  printableEnqueueBack value (PrintableSuffixed a queue) = PrintableSuffixed a $ Q.enqueue value queue
+  printableEnqueueBack value (PrintableInfixed prefix suffix queue) = PrintableInfixed prefix suffix $ Q.enqueue value queue
+
+  letBindingVarValuePrintable
+    :: LetBinding Text
+    -> Printable Text
+  letBindingVarValuePrintable (LetBinding (Var var) value) = Printable (Q.singleton $ TE.decodeUtf8 var <> value)
+
+  letBindingVarPrintable
+    :: LetBinding a
+    -> Printable Text
+  letBindingVarPrintable (LetBinding (Var var) _) = Printable (Q.singleton $ TE.decodeUtf8 var)
+
+  letBindingValuePrintable
+    :: LetBinding a
+    -> Printable a
+  letBindingValuePrintable (LetBinding _ value) = Printable (Q.singleton value)
+
+  printableToList
+    :: Semigroup a
+    => Printable a
+    -> [a]
+  printableToList (Printable queue) = Q.toList queue
+  printableToList (PrintablePrefixed _ Q.Empty) = []
+  printableToList (PrintablePrefixed prefix (Q.Full curr rest)) = prefix <> curr : printableToList (PrintablePrefixed prefix rest)
+  printableToList (PrintableSuffixed _ Q.Empty) = []
+  printableToList (PrintableSuffixed suffix (Q.Full curr rest)) = curr <> suffix : printableToList (PrintableSuffixed suffix rest)
+  printableToList (PrintableInfixed _ _ Q.Empty) = []
+  printableToList (PrintableInfixed prefix suffix (Q.Full curr rest)) = prefix <> curr <> suffix : printableToList (PrintableInfixed prefix suffix rest)
 
   --------------------
 
