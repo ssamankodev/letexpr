@@ -5,7 +5,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
 
-module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letBindingBS, filterMapOrMap, foldlLetExpr, letBindingCaseVar, letBindingCaseVarBS, letBindingCaseVarBSValue, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, printable, printablePrefixed, printableSuffixed, printableInfixed, printableEnqueueFront, printableEnqueueBack, letBindingVarPrintable, letBindingValuePrintable, printableToList, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
+module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letBindingBS, filterMapOrMap, foldlLetExpr, letBindingCaseVar, letBindingCaseVarBS, letBindingCaseVarBSValue, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, printableSetPrefix, printableSetSuffix, printable, printablePrefixed, printableSuffixed, printableInfixed, printableEnqueueFront, printableEnqueueBack, letBindingVarPrintable, letBindingValuePrintable, printableToList, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
 
   import Data.List.NonEmpty (NonEmpty(..), (<|))
   import qualified Data.List.NonEmpty as NE
@@ -47,6 +47,24 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letB
     | PrintableInfixed a a [a] a (Queue a)
 
   --------------------
+
+  printableSetPrefix
+    :: a
+    -> Printable a
+    -> Printable a
+  printableSetPrefix prefix (Printable front middle back) = PrintablePrefixed prefix front middle back
+  printableSetPrefix prefix (PrintablePrefixed _ front middle back) = PrintablePrefixed prefix front middle back
+  printableSetPrefix prefix (PrintableSuffixed suffix front middle back) = PrintableInfixed prefix suffix front middle back
+  printableSetPrefix prefix (PrintableInfixed _ suffix front middle back) = PrintableInfixed prefix suffix front middle back
+
+  printableSetSuffix
+    :: a
+    -> Printable a
+    -> Printable a
+  printableSetSuffix suffix (Printable front middle back) = PrintableSuffixed suffix front middle back
+  printableSetSuffix suffix (PrintablePrefixed prefix front middle back) = PrintableInfixed prefix suffix front middle back
+  printableSetSuffix suffix (PrintableSuffixed _ front middle back) = PrintableSuffixed suffix front middle back
+  printableSetSuffix suffix (PrintableInfixed prefix _ front middle back) = PrintableInfixed prefix suffix front middle back
 
   printable
     :: a

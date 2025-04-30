@@ -7,13 +7,21 @@ module MyLib.Print(invalidRebindMessage, variableUnderline, exprRecInvalidRecurs
   import Data.Text(Text)
   import qualified Data.Text as T
   import qualified Data.Text.Encoding as TE
+  import qualified Data.Text.Lazy as L
   import Data.List.NonEmpty
   import Data.Bifunctor
   import Data.Foldable1
+  import GHC.Int (Int64)
 
 -- ------------------
 -- | Error Messages |
 -- ------------------
+
+  repeatChar
+    :: GHC.Int.Int64
+    -> Char
+    -> Text
+  repeatChar rep char = L.toStrict . L.take rep $ L.repeat char
 
   variableUnderline
     :: LetBindingTypesContainer
@@ -36,6 +44,17 @@ module MyLib.Print(invalidRebindMessage, variableUnderline, exprRecInvalidRecurs
   letBindingRebindsMessage lb =
     ("Variable '" <> letBindingCaseVarBS TE.decodeUtf8 lb <> "' was bound to the following definitions, in order of recency:")
     <| fmap (T.unfoldrN 4 (\x -> Just (' ', x)) () <>) (letBindingCaseVarBSValue (\_ val -> val) lb)
+
+  letBindingRebindsMessageNew
+    :: LetBinding (NonEmpty Text)
+    -> NonEmpty Text
+  letBindingRebindsMessageNew lb =
+    "Variable '" <> fold1 (printableToList $ letBindingVarPrintable lb) <> "' was bound to the following definitions, in order of recency:"
+    <| fmap (fold1
+         . printableToList
+         . printableSetPrefix (repeatChar 4 ' ')
+         . letBindingValuePrintable)
+         (letBindingNonEmptyToNonEmptyLetBinding lb)
 
   invalidRebindMessage
     :: [LetBinding (NonEmpty Text)]
