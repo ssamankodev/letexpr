@@ -33,22 +33,13 @@ module MyLib.Print(invalidRebindMessage, variableUnderline, exprRecInvalidRecurs
     -> NonEmpty Text
   containerVariableUnderline = containerToList . bimap (T.map (const '^') . TE.decodeUtf8 . (\(Var var) -> var)) (T.map (const ' '))
 
-  --This function should be explaining how the given LetBinding was invalid.
-  --It should state what the given Var/whole LetBinding is, then underline
-  exprRecInvalidRecursionMessage :: Var -> Text
-  exprRecInvalidRecursionMessage var = "The let expression contains a let binding that recursively binds variable '" `T.append` TE.decodeUtf8 ((\(Var inner) -> inner) var) `T.append` "' to itself."
+  exprRecInvalidRecursionMessage :: LetBinding a -> Text
+  exprRecInvalidRecursionMessage lb = "The let expression contains a let binding that recursively binds variable '" <> (fold1 . printableToList $ letBindingVarPrintable lb) <> "' to itself."
 
   letBindingRebindsMessage
     :: LetBinding (NonEmpty Text)
     -> NonEmpty Text
   letBindingRebindsMessage lb =
-    ("Variable '" <> letBindingCaseVarBS TE.decodeUtf8 lb <> "' was bound to the following definitions, in order of recency:")
-    <| fmap (T.unfoldrN 4 (\x -> Just (' ', x)) () <>) (letBindingCaseVarBSValue (\_ val -> val) lb)
-
-  letBindingRebindsMessageNew
-    :: LetBinding (NonEmpty Text)
-    -> NonEmpty Text
-  letBindingRebindsMessageNew lb =
     "Variable '" <> fold1 (printableToList $ letBindingVarPrintable lb) <> "' was bound to the following definitions, in order of recency:"
     <| fmap (fold1
          . printableToList
