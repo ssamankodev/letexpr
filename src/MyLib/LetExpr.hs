@@ -5,7 +5,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
 
-module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letBindingBS, filterMapOrMap, foldlLetExpr, letBindingCaseVar, letBindingCaseVarBS, letBindingCaseVarBSValue, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, printable, printablePrefixed, printableSuffixed, printableInfixed, printableEnqueueFront, printableEnqueueBack, letBindingVarValuePrintable, letBindingVarPrintable, letBindingValuePrintable, printableToList, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
+module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letBindingBS, filterMapOrMap, foldlLetExpr, letBindingCaseVar, letBindingCaseVarBS, letBindingCaseVarBSValue, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, printable, printablePrefixed, printableSuffixed, printableInfixed, printableEnqueueFront, printableEnqueueBack, letBindingVarPrintable, letBindingValuePrintable, printableToList, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
 
   import Data.List.NonEmpty (NonEmpty(..), (<|))
   import qualified Data.List.NonEmpty as NE
@@ -41,77 +41,73 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letB
     deriving Functor
 
   data Printable a
-    = Printable (Queue a)
-    | PrintablePrefixed a (Queue a)
-    | PrintableSuffixed a (Queue a)
-    | PrintableInfixed a a (Queue a)
+    = Printable [a] a (Queue a)
+    | PrintablePrefixed a [a] a (Queue a)
+    | PrintableSuffixed a [a] a (Queue a)
+    | PrintableInfixed a a [a] a (Queue a)
 
   --------------------
 
   printable
-    :: Printable a
-  printable = Printable Q.empty
+    :: a
+    -> Printable a
+  printable value = Printable [] value Q.empty
 
   printablePrefixed
     :: a
+    -> a
     -> Printable a
-  printablePrefixed a = PrintablePrefixed a Q.empty
+  printablePrefixed prefix value = PrintablePrefixed prefix [] value Q.empty
 
   printableSuffixed
     :: a
+    -> a
     -> Printable a
-  printableSuffixed a = PrintableSuffixed a Q.empty
+  printableSuffixed suffix value = PrintableSuffixed suffix [] value Q.empty
 
   printableInfixed
     :: a
     -> a
+    -> a
     -> Printable a
-  printableInfixed prefix suffix = PrintableInfixed prefix suffix Q.empty
+  printableInfixed prefix suffix value = PrintableInfixed prefix suffix [] value Q.empty
 
   printableEnqueueFront
     :: a
     -> Printable a
     -> Printable a
-  printableEnqueueFront value (Printable queue) = Printable $ Q.enqueueFront value queue
-  printableEnqueueFront value (PrintablePrefixed a queue) = PrintablePrefixed a $ Q.enqueueFront value queue
-  printableEnqueueFront value (PrintableSuffixed a queue) = PrintableSuffixed a $ Q.enqueueFront value queue
-  printableEnqueueFront value (PrintableInfixed prefix suffix queue) = PrintableInfixed prefix suffix $ Q.enqueueFront value queue
+  printableEnqueueFront value (Printable front middle back) = Printable (value : front) middle back
+  printableEnqueueFront value (PrintablePrefixed prefix front middle back) = PrintablePrefixed prefix (value : front) middle back
+  printableEnqueueFront value (PrintableSuffixed suffix front middle back) = PrintableSuffixed suffix (value : front) middle back
+  printableEnqueueFront value (PrintableInfixed prefix suffix front middle back) = PrintableInfixed prefix suffix (value : front) middle back
 
   printableEnqueueBack
     :: a
     -> Printable a
     -> Printable a
-  printableEnqueueBack value (Printable queue) = Printable $ Q.enqueue value queue
-  printableEnqueueBack value (PrintablePrefixed a queue) = PrintablePrefixed a $ Q.enqueue value queue
-  printableEnqueueBack value (PrintableSuffixed a queue) = PrintableSuffixed a $ Q.enqueue value queue
-  printableEnqueueBack value (PrintableInfixed prefix suffix queue) = PrintableInfixed prefix suffix $ Q.enqueue value queue
-
-  letBindingVarValuePrintable
-    :: LetBinding Text
-    -> Printable Text
-  letBindingVarValuePrintable (LetBinding (Var var) value) = Printable (Q.singleton $ TE.decodeUtf8 var <> value)
+  printableEnqueueBack value (Printable front middle back) = Printable front middle $ Q.enqueue value back
+  printableEnqueueBack value (PrintablePrefixed prefix front middle back) = PrintablePrefixed prefix front middle $ Q.enqueue value back
+  printableEnqueueBack value (PrintableSuffixed suffix front middle back) = PrintableSuffixed suffix front middle $ Q.enqueue value back
+  printableEnqueueBack value (PrintableInfixed prefix suffix front middle back) = PrintableInfixed prefix suffix front middle $ Q.enqueue value back
 
   letBindingVarPrintable
     :: LetBinding a
     -> Printable Text
-  letBindingVarPrintable (LetBinding (Var var) _) = Printable (Q.singleton $ TE.decodeUtf8 var)
+  letBindingVarPrintable (LetBinding (Var var) _) = Printable [] (TE.decodeUtf8 var) Q.empty
 
   letBindingValuePrintable
     :: LetBinding a
     -> Printable a
-  letBindingValuePrintable (LetBinding _ value) = Printable (Q.singleton value)
+  letBindingValuePrintable (LetBinding _ value) = Printable [] value Q.empty
 
   printableToList
     :: Semigroup a
     => Printable a
-    -> [a]
-  printableToList (Printable queue) = Q.toList queue
-  printableToList (PrintablePrefixed _ Q.Empty) = []
-  printableToList (PrintablePrefixed prefix (Q.Full curr rest)) = prefix <> curr : printableToList (PrintablePrefixed prefix rest)
-  printableToList (PrintableSuffixed _ Q.Empty) = []
-  printableToList (PrintableSuffixed suffix (Q.Full curr rest)) = curr <> suffix : printableToList (PrintableSuffixed suffix rest)
-  printableToList (PrintableInfixed _ _ Q.Empty) = []
-  printableToList (PrintableInfixed prefix suffix (Q.Full curr rest)) = prefix <> curr <> suffix : printableToList (PrintableInfixed prefix suffix rest)
+    -> NonEmpty a
+  printableToList (Printable front middle back) = NE.prependList front $ middle :| Q.toList back
+  printableToList (PrintablePrefixed prefix front middle back) = fmap (prefix <>) . NE.prependList front $ middle :| Q.toList back
+  printableToList (PrintableSuffixed suffix front middle back) = fmap (<> suffix) . NE.prependList front $ middle :| Q.toList back
+  printableToList (PrintableInfixed prefix suffix front middle back) = fmap (\x -> prefix <> x <> suffix) . NE.prependList front $ middle :| Q.toList back
 
   --------------------
 
