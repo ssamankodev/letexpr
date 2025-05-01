@@ -5,7 +5,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
 
-module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letBindingBS, filterMapOrMap, foldlLetExpr, letBindingCaseVar, letBindingCaseVarBS, letBindingCaseVarBSValue, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, printableSetPrefix, printableSetSuffix, printable, printablePrefixed, printableSuffixed, printableInfixed, printableEnqueueFront, printableEnqueueBack, letBindingVarPrintable, letBindingValuePrintable, printableToList, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
+module MyLib.LetExpr (LetExpr(..), LetBinding, Var, TrieLB, Printable,  letBindingBS, filterMapOrMap, foldlLetExpr, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, printableSetPrefix, printableSetSuffix, printable, printablePrefixed, printableSuffixed, printableInfixed, printableEnqueueFront, printableEnqueueBack, letBindingVarPrintable, letBindingValuePrintable, varPrintable, printableToList, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
 
   import Data.List.NonEmpty (NonEmpty(..), (<|))
   import qualified Data.List.NonEmpty as NE
@@ -13,7 +13,6 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letB
   import Data.ByteString (ByteString)
   import qualified Data.ByteString as B
   import Data.Text (Text)
-  import qualified Data.Text as T
   import qualified Data.Text.Encoding as TE
   import Data.Foldable
   import Data.Trie (Trie)
@@ -45,6 +44,27 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letB
     | PrintablePrefixed a [a] a (Queue a)
     | PrintableSuffixed a [a] a (Queue a)
     | PrintableInfixed a a [a] a (Queue a)
+
+  instance Semigroup a => Semigroup (Printable a) where
+    (Printable front middle back) <> enqueueBack = Printable front middle $ back <> (Q.fromList . NE.toList $ printableToList enqueueBack)
+    (PrintablePrefixed prefix front middle back) <> enqueueBack =
+      let
+        prefixFn :: Semigroup a => a -> a
+        prefixFn = (prefix <>)
+      in
+      Printable (fmap prefixFn front) (prefixFn middle) (fmap prefixFn back <> (Q.fromList . NE.toList $ printableToList enqueueBack))
+    (PrintableSuffixed suffix front middle back) <> enqueueBack =
+      let
+        suffixFn :: Semigroup a => a -> a
+        suffixFn = (<> suffix)
+      in
+      Printable (fmap suffixFn front) (suffixFn middle) (fmap suffixFn back <> (Q.fromList . NE.toList $ printableToList enqueueBack))
+    (PrintableInfixed prefix suffix front middle back) <> enqueueBack =
+      let
+        infixFn :: Semigroup a => a -> a
+        infixFn x = prefix <> x <> suffix
+      in
+      Printable (fmap infixFn front) (infixFn middle) (fmap infixFn back <> (Q.fromList . NE.toList $ printableToList enqueueBack))
 
   --------------------
 
@@ -118,6 +138,11 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letB
     -> Printable a
   letBindingValuePrintable (LetBinding _ value) = Printable [] value Q.empty
 
+  varPrintable
+    :: Var
+    -> Printable Text
+  varPrintable (Var var) = Printable [] (TE.decodeUtf8 var) Q.empty
+
   printableToList
     :: Semigroup a
     => Printable a
@@ -170,11 +195,11 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letB
   matchTrieLB
     :: TrieLB a
     -> ByteString
-    -> Maybe (Int, (ByteString, a), ByteString)
+    -> Maybe (Int, (Var, a), ByteString)
   matchTrieLB (TrieLB trie) bs =
     let
       go trie' bs' accum = case Trie.match trie' bs' of
-        Just (match, value, suffix) -> Just (accum, (match, value), suffix)
+        Just (match, value, suffix) -> Just (accum, (Var match, value), suffix)
         Nothing -> case snd <$> B.uncons bs' of
           Just rest' -> go trie' rest' $ accum + 1
           Nothing -> Nothing
@@ -301,21 +326,3 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var(..), TrieLB, Printable,  letB
     -> LetBinding a
     -> LetBinding b
   mapLetBinding fn (LetBinding var value) = LetBinding var $ fn var value
-
-  letBindingCaseVar
-    :: (Var -> a)
-    -> LetBinding b
-    -> a
-  letBindingCaseVar fn (LetBinding var _) = fn var
-
-  letBindingCaseVarBS
-    :: (ByteString -> a)
-    -> LetBinding b
-    -> a
-  letBindingCaseVarBS fn (LetBinding (Var bs) _) = fn bs
-
-  letBindingCaseVarBSValue
-    :: (ByteString -> a -> b)
-    -> LetBinding a
-    -> b
-  letBindingCaseVarBSValue fn (LetBinding (Var bs) value) = fn bs value

@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 
-module MyLib.Container(Container(..), LetBindingTypesContainer(..), ContainerShell(..), ContainerNormal(..), ContainerData(..), ContainerSingle(..), Normal(..), containerToList, containerNormalToContainer, letBindingTypesContainerToContainer, containerToLetBindingTypes, prependContainerData, normalToContainerData, foldlContainerToList) where
+module MyLib.Container(Container(..), LetBindingTypesContainer(..), RecursiveLetBindingTypesContainer(..), ContainerShell(..), ContainerNormal(..), ContainerData(..), ContainerSingle(..), ContainerFactor(..), ContainerFactorOrNormal(..), Normal(..), containerToList, containerFactorToContainer, containerNormalToContainer, containerFactorOrNormalToContainer, letBindingTypesContainerToContainer, recursiveLetBindingTypesContainerToContainer, containerToLetBindingTypes, prependContainerData, normalToContainerData, foldlContainerToList) where
 
   import Data.Text (Text)
   import Data.List.NonEmpty (NonEmpty(..), (<|))
@@ -14,6 +14,10 @@ module MyLib.Container(Container(..), LetBindingTypesContainer(..), ContainerShe
     | LetBindingContainerFactor (ContainerFactor Var Text)
     | LetBindingContainerNormal (ContainerNormal Var Text)
     | LetBindingContainerFactorOrNormal (ContainerFactorOrNormal Var Text)
+
+  data RecursiveLetBindingTypesContainer
+    = RecLetBindingContainerFactor (ContainerFactor Var Text)
+    | RecLetBindingContainerFactorOrNormal (ContainerFactorOrNormal Var Text)
 
   --A container of two types of data, where the first type variable is the primary data type and the second type variable is the secondary data type. It can hold datum of the secondary data type before it holds a ContainerData of the same type variables, or it can just hold a ContainerData of the same type variables, or it can just hold a single datum of the secondary data type.
   data Container a b
@@ -261,6 +265,12 @@ module MyLib.Container(Container(..), LetBindingTypesContainer(..), ContainerShe
   containerFactorOrNormalDataToContainerData factor (ContainerFactorOrNormalDataNormal normalValue rest) = prependContainerData normalValue $ containerFactorOrNormalDataToContainerData factor rest
   containerFactorOrNormalDataToContainerData factor (ContainerFactorOrNormalDataFactorToNormalSwitch factorValue rest) = ContainerData $ factorToNormal factor factorValue <| rest
   containerFactorOrNormalDataToContainerData factor (ContainerFactorOrNormalDataNormalToFactorSwitch normalValue rest) = ContainerData $ normalValue <| fmap (factorToNormal factor) rest
+
+  recursiveLetBindingTypesContainerToContainer
+    :: RecursiveLetBindingTypesContainer
+    -> Container Var Text
+  recursiveLetBindingTypesContainerToContainer (RecLetBindingContainerFactor container) = containerFactorToContainer container
+  recursiveLetBindingTypesContainerToContainer (RecLetBindingContainerFactorOrNormal container) = containerFactorOrNormalToContainer container
 
   letBindingTypesContainerToContainer
     :: LetBindingTypesContainer

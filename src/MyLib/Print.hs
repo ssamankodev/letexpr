@@ -1,12 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module MyLib.Print(invalidRebindMessage, variableUnderline, exprRecInvalidRecursionMessage, letBindingRebindsMessage) where
+module MyLib.Print(invalidRebindMessage, exprRecInvalidRecursionMessage, letBindingRebindsMessage) where
 
   import MyLib.LetExpr
   import MyLib.Container
   import Data.Text(Text)
   import qualified Data.Text as T
-  import qualified Data.Text.Encoding as TE
   import qualified Data.Text.Lazy as L
   import Data.List.NonEmpty
   import Data.Bifunctor
@@ -23,18 +22,63 @@ module MyLib.Print(invalidRebindMessage, variableUnderline, exprRecInvalidRecurs
     -> Text
   repeatChar rep char = L.toStrict . L.take rep $ L.repeat char
 
-  variableUnderline
-    :: LetBindingTypesContainer
+  containerFactorRecVariableOriginalAndUnderline
+    :: ContainerFactor Var Text
+    -> Printable Text
+  containerFactorRecVariableOriginalAndUnderline container = 
+    printableSetPrefix (repeatChar 4 ' ')
+    . printableSetSuffix "\n"
+    $ (fold1 . containerToList . first (fold1 . printableToList . varPrintable) $ containerFactorToContainer container)
+      `printableEnqueueFront` printable (containerFactorRecVariableUnderline container)
+
+  containerFactorOrNormalRecVariableOriginalAndUnderline
+    :: ContainerFactorOrNormal Var Text
+    -> Printable Text
+  containerFactorOrNormalRecVariableOriginalAndUnderline container = 
+    printableSetPrefix (repeatChar 4 ' ')
+    . printableSetSuffix "\n"
+    $ (fold1 . containerToList . first (fold1 . printableToList . varPrintable) $ containerFactorOrNormalToContainer container)
+      `printableEnqueueFront` printable (containerFactorOrNormalRecVariableUnderline container)
+
+  containerFactorRecVariableUnderline
+    :: ContainerFactor Var Text
     -> Text
-  variableUnderline expr = fold1 . containerVariableUnderline $ letBindingTypesContainerToContainer expr
+  containerFactorRecVariableUnderline container@(ContainerFactor factor _) = containerVariableUnderline factor $ containerFactorToContainer container
+
+  containerFactorOrNormalRecVariableUnderline
+    :: ContainerFactorOrNormal Var Text
+    -> Text
+  containerFactorOrNormalRecVariableUnderline container@(ContainerFactorOrNormal factor _) = containerVariableUnderline factor $ containerFactorOrNormalToContainer container
 
   containerVariableUnderline
-    :: Container Var Text
-    -> NonEmpty Text
-  containerVariableUnderline = containerToList . bimap (T.map (const '^') . TE.decodeUtf8 . (\(Var var) -> var)) (T.map (const ' '))
+    :: Var
+    -> Container Var Text
+    -> Text
+  containerVariableUnderline match container =
+    let
+      underlineVarOrEmpty :: Var -> Var -> Text
+      underlineVarOrEmpty match' var' =
+        if match' == var'
+        then T.map (const '^') . fold1 . printableToList $ varPrintable var'
+        else T.map (const ' ') . fold1 . printableToList $ varPrintable var'
+    in
+    fold1 . containerToList $ bimap (underlineVarOrEmpty match) (T.map (const ' ')) container
 
-  exprRecInvalidRecursionMessage :: LetBinding a -> Text
-  exprRecInvalidRecursionMessage lb = "The let expression contains a let binding that recursively binds variable '" <> (fold1 . printableToList $ letBindingVarPrintable lb) <> "' to itself."
+  exprRecInvalidRecursionMessage :: LetBinding RecursiveLetBindingTypesContainer -> Text
+  exprRecInvalidRecursionMessage lb = "The let expression contains a let binding that recursively binds variable '" <> (fold1 . printableToList $ letBindingVarPrintable lb) <> "' to itself." <> "\n" <> (fold1 . printableToList $ exprThenUnderlineRecVar lb)
+
+  exprThenUnderlineRecVar
+    :: LetBinding RecursiveLetBindingTypesContainer
+    -> Printable Text
+  exprThenUnderlineRecVar lb =
+    let
+      recToPrintable
+        :: RecursiveLetBindingTypesContainer
+        -> Printable Text
+      recToPrintable (RecLetBindingContainerFactor container) = fold1 . printableToList . printable $ containerFactorRecVariableOriginalAndUnderline container
+      recToPrintable (RecLetBindingContainerFactorOrNormal container) = fold1 . printableToList . printable $ containerFactorOrNormalRecVariableOriginalAndUnderline container
+    in
+    fold1 . printableToList . letBindingValuePrintable $ fmap recToPrintable lb
 
   letBindingRebindsMessage
     :: LetBinding (NonEmpty Text)

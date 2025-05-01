@@ -45,13 +45,14 @@ module MyLib.BetaReduce(RecursionAllowance(..), betaReduceContainer, letExprCont
 
   validateRecursionLetBindingTypesContainer
     :: forall b c . LetExpr (Either (Valid LetBindingTypesContainer, Container c Text) Text) b
-    -> Either (NonEmpty (LetBinding LetBindingTypesContainer)) (LetExpr (Container c Text) b)
+    -> Either (NonEmpty (LetBinding RecursiveLetBindingTypesContainer)) (LetExpr (Container c Text) b)
   validateRecursionLetBindingTypesContainer expr =
     let
       filterFn
         :: Either (Valid LetBindingTypesContainer) Text
-        -> Maybe LetBindingTypesContainer
-      filterFn (Left (Invalid lbt)) = Just lbt
+        -> Maybe RecursiveLetBindingTypesContainer
+      filterFn (Left (Invalid (LetBindingContainerFactor container))) = Just $ RecLetBindingContainerFactor container
+      filterFn (Left (Invalid (LetBindingContainerFactorOrNormal container))) = Just $ RecLetBindingContainerFactorOrNormal container
       filterFn _ = Nothing
     in
     filterMapOrMap (filterFn . first fst) (eitherValue . bimap snd (ContainerSingle . ContainerSingleValue)) expr
@@ -89,7 +90,7 @@ module MyLib.BetaReduce(RecursionAllowance(..), betaReduceContainer, letExprCont
       takeUntilMatch trie' bs' =
         case matchTrieLB trie' bs' of
           Nothing -> Nothing
-          Just (accum', matching', suffix') -> Just (TE.decodeUtf8 $ B.take accum' bs', first Var matching', suffix')
+          Just (accum', matching', suffix') -> Just (TE.decodeUtf8 $ B.take accum' bs', matching', suffix')
 
       bsToContainerData :: TrieLB a -> Var -> a -> ByteString -> (ContainerData Var Text, ContainerData a Text)
       bsToContainerData trie' var' value' bs' =

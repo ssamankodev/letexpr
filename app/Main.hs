@@ -10,6 +10,7 @@ module Main where
   import System.Exit
   import Data.List.NonEmpty (NonEmpty)
   import qualified Data.List.NonEmpty as NE
+  import Data.Foldable1
   import MyLib
 
   main :: IO ()
@@ -26,8 +27,8 @@ module Main where
         Left value -> case validateRecursionLetBindingTypesContainer . mapLetBindings (eitherLetBindingToLetBindingEither . first identifyVariablesContainer . letBindingEitherToEitherLetBinding) $ first (\(a, b) -> first (\(x, y) -> (x, y, b)) a) value of
           Left invalidRecursions -> do
             T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
-            --TODO: Implement printing of invalid recursive LetBindingTypes
-            --print invalidRecursions
+            T.putStrLn ""
+            T.putStr . fold1 . NE.intersperse "\n" $ fmap exprRecInvalidRecursionMessage invalidRecursions
             T.putStrLn Data.Text.empty
           Right validLetExpr -> do
             let
@@ -39,9 +40,8 @@ module Main where
         Right value -> case validateRecursionLetBindingTypesContainer . mapLetBindings (eitherLetBindingToLetBindingEither . first identifyVariablesContainer . letBindingEitherToEitherLetBinding) $ first (\(a, b) -> first (\(x, y) -> (x, y, b)) a) value of
           Left invalidRecursions -> do
             T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
-            --TODO: Replace print with actual formatted error message
-            --print invalidRecursions
-            T.putStrLn Data.Text.empty
+            T.putStrLn ""
+            T.putStr . fold1 . NE.intersperse "\n" $ fmap exprRecInvalidRecursionMessage invalidRecursions
           Right validLetExpr -> do
             let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherValue . bimap (first fst . snd) (ContainerSingle . ContainerSingleValue)) validLetExpr
             mapM_ T.putStr . uncurry betaReduceContainer $ letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
@@ -49,21 +49,20 @@ module Main where
       Nothing -> case mutualReferenceLetExprParse vExprs of
         Just validSyntax -> case mutualUnfoldIndexValuesTrie validSyntax of
           Left value -> do
-            T.putStrLn "[Error]: Input rebinds at least one mutually referential variable, which is invalid."
+            T.putStrLn "[ERROR]: Input rebinds at least one mutually referential variable, which is invalid."
             T.putStrLn ""
             traverse_ (mapM_ T.putStrLn) . invalidRebindMessage $ fmap (fmap (fmap snd)) value
           Right value -> case validateRecursionLetBindingTypesContainer . mapLetBindings (eitherLetBindingToLetBindingEither . first identifyVariablesContainer . letBindingEitherToEitherLetBinding) $ first (\(a, b) -> first (\(x, y) -> (x, y, b)) a) value of
             Left invalidRecursions -> do
               T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
-              --TODO: Replace print with actual formatted error message
-              --print invalidRecursions
-              T.putStrLn Data.Text.empty
+              T.putStrLn ""
+              T.putStr . fold1 . NE.intersperse "\n" $ fmap exprRecInvalidRecursionMessage invalidRecursions
             Right validLetExpr -> do
               let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherValue . bimap (first fst . snd) (ContainerSingle . ContainerSingleValue)) validLetExpr
               mapM_ T.putStr . uncurry betaReduceContainer $ letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
               T.putStrLn Data.Text.empty
         Nothing -> do
-          putStrLn "[Error]: Input was not syntactically valid."
+          putStrLn "[ERROR]: Input was not syntactically valid."
           exitFailure
     else case linearReferenceLetExprParse vExprs of
       Just validSyntax -> case linearUnfoldIndexValuesTrie validSyntax of
@@ -74,15 +73,14 @@ module Main where
             getRight (Right b) = Just $ fmap snd b
             getRight _ = Nothing
 
-          T.putStrLn "[Error]: Input rebinds at least one mutually referential variable, which is invalid when the 'rebind' switch is not provided."
+          T.putStrLn "[ERROR]: Input rebinds at least one mutually referential variable, which is invalid when the 'rebind' switch is not provided."
           T.putStrLn ""
           traverse_ (mapM_ T.putStrLn) . invalidRebindMessage . trieLBToLetBindings $ filterMapTrieLB getRight finalTrie
         Right value -> case validateRecursionLetBindingTypesContainer . mapLetBindings (eitherLetBindingToLetBindingEither . first identifyVariablesContainer . letBindingEitherToEitherLetBinding) $ first (\(a, b) -> first (\(x, y) -> (x, y, b)) a) value of
           Left invalidRecursions -> do
             T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
-            --TODO: Replace print with actual formatted error message
-            --print invalidRecursions
-            T.putStrLn Data.Text.empty
+            T.putStrLn ""
+            T.putStr . fold1 . NE.intersperse "\n" $ fmap exprRecInvalidRecursionMessage invalidRecursions
           Right validLetExpr -> do
             let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherValue . bimap (first fst . snd) (ContainerSingle . ContainerSingleValue)) validLetExpr
             mapM_ T.putStr . uncurry betaReduceContainer $ letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
@@ -90,19 +88,18 @@ module Main where
       Nothing -> case mutualReferenceLetExprParse vExprs of
         Just validSyntax -> case mutualUnfoldIndexValuesTrie validSyntax of
           Left value -> do
-            T.putStrLn "[Error]: Input rebinds at least one mutually referential variable, which is invalid."
+            T.putStrLn "[ERROR]: Input rebinds at least one mutually referential variable, which is invalid."
             T.putStrLn ""
             traverse_ (mapM_ T.putStrLn) . invalidRebindMessage $ fmap (fmap (fmap snd)) value
           Right value -> case validateRecursionLetBindingTypesContainer . mapLetBindings (eitherLetBindingToLetBindingEither . first identifyVariablesContainer . letBindingEitherToEitherLetBinding) $ first (\(a, b) -> first (\(x, y) -> (x, y, b)) a) value of
             Left invalidRecursions -> do
               T.putStrLn $ "[ERROR]: Some let bindings were recursive in definition, but were not defined as being recursive with the '" <> "rec" <> "' modifier."
-              --TODO: Replace print with actual formatted error message
-              --print invalidRecursions
-              T.putStrLn Data.Text.empty
+              T.putStrLn ""
+              T.putStr . fold1 . NE.intersperse "\n" $ fmap exprRecInvalidRecursionMessage invalidRecursions
             Right validLetExpr -> do
               let simplifiedFinalExprValidLetExpr = bimap (first fst) (eitherValue . bimap (first fst . snd) (ContainerSingle . ContainerSingleValue)) validLetExpr
               mapM_ T.putStr . uncurry betaReduceContainer $ letExprContainerToFinalContainer simplifiedFinalExprValidLetExpr
               T.putStrLn Data.Text.empty
         Nothing -> do
-          putStrLn "[Error]: Input was not syntactically valid."
+          putStrLn "[ERROR]: Input was not syntactically valid."
           exitFailure
