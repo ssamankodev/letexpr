@@ -160,55 +160,16 @@ module MyLib.Container(Container(..), LetBindingTypesContainer(..), RecursiveLet
     Left factor -> Right . Left . ContainerFactorData $ NE.singleton factor
     Right norm -> Left . ContainerData $ NE.singleton norm
   containerDataToContainerFactorOrNormalData match (ContainerData (normal :| (next : rest))) =
-    let
-      reversedNormalToFactorOrNormal
-        :: Eq a
-        => a
-        -> ContainerData a b
-        -> NonEmpty (Normal a b)
-        -> Either (ContainerData a b)
-                  (ContainerFactorOrNormalData a b)
-      reversedNormalToFactorOrNormal match' processed@(ContainerData container) (normal' :| []) = case normalToEitherFactorNormal match' normal' of
-        Left factor -> Right $ ContainerFactorOrNormalDataFactorToNormalSwitch factor container
-        Right norm -> Left $ prependContainerData norm processed
-      reversedNormalToFactorOrNormal match' processed@(ContainerData container) (normal' :| (next' : rest')) = case normalToEitherFactorNormal match' normal' of
-        Left factor -> Right $ reversedNormalToFactorAndOrNormal match' (next' :| rest') $ ContainerFactorOrNormalDataFactorToNormalSwitch factor container
-        Right norm -> reversedNormalToFactorOrNormal match' (prependContainerData norm processed) (next' :| rest')
-
-      reversedFactorToFactorOrNormal
-        :: Eq a
-        => a
-        -> ContainerFactorData b
-        -> NonEmpty (Normal a b)
-        -> Either (ContainerFactorData b)
-                  (ContainerFactorOrNormalData a b)
-      reversedFactorToFactorOrNormal match' processed@(ContainerFactorData container) (normal' :| []) = case normalToEitherFactorNormal match' normal' of
-        Left factor -> Left $ prependContainerFactorData factor processed
-        Right norm -> Right $ ContainerFactorOrNormalDataNormalToFactorSwitch norm container
-      reversedFactorToFactorOrNormal match' processed@(ContainerFactorData container) (normal' :| (next' : rest')) = case normalToEitherFactorNormal match' normal' of
-        Left factor -> reversedFactorToFactorOrNormal match' (prependContainerFactorData factor processed) (next' :| rest')
-        Right norm -> Right $ reversedNormalToFactorAndOrNormal match' (next' :| rest') $ ContainerFactorOrNormalDataNormalToFactorSwitch norm container
-
-      reversedNormalToFactorAndOrNormal
-        :: Eq a
-        => a
-        -> NonEmpty (Normal a b)
-        -> ContainerFactorOrNormalData a b
-        -> ContainerFactorOrNormalData a b
-      reversedNormalToFactorAndOrNormal match' (normal' :| []) processed = case normalToEitherFactorNormal match' normal' of
-        Left factor -> ContainerFactorOrNormalDataFactor factor processed
-        Right norm -> ContainerFactorOrNormalDataNormal norm processed
-      reversedNormalToFactorAndOrNormal match' (normal' :| (next' : rest')) processed = reversedNormalToFactorAndOrNormal match' (next' :| rest') $ case normalToEitherFactorNormal match' normal' of
-        Left factor -> ContainerFactorOrNormalDataFactor factor processed
-        Right norm -> ContainerFactorOrNormalDataNormal norm processed
-    in
-    case normalToEitherFactorNormal match normal of
-      Left factor -> case reversedFactorToFactorOrNormal match (ContainerFactorData $ NE.singleton factor) (next :| rest) of
-        Left factor' -> Right $ Left factor'
-        Right factorOrNormal' -> Right $ Right factorOrNormal'
-      Right norm -> case reversedNormalToFactorOrNormal match (ContainerData $ NE.singleton norm) (next :| rest) of
-        Left normal' -> Left normal'
-        Right factorOrNormal' -> Right $ Right factorOrNormal'
+    case containerDataToContainerFactorOrNormalData match (ContainerData (next :| rest)) of
+      Left containerData@(ContainerData containerDataRes) -> case normalToEitherFactorNormal match normal of
+        Left factorRes -> Right . Right $ ContainerFactorOrNormalDataFactorToNormalSwitch factorRes containerDataRes
+        Right normalRes -> Left $ prependContainerData normalRes containerData
+      Right (Left containerFactorData@(ContainerFactorData containerFactorRes)) -> case normalToEitherFactorNormal match normal of
+        Left factorRes -> Right . Left $ prependContainerFactorData factorRes containerFactorData
+        Right normalRes -> Right . Right $ ContainerFactorOrNormalDataNormalToFactorSwitch normalRes containerFactorRes
+      Right (Right containerFactorOrNormalData) -> case normalToEitherFactorNormal match normal of
+        Left factorRes -> Right . Right $ ContainerFactorOrNormalDataFactor factorRes containerFactorOrNormalData
+        Right normalRes -> Right . Right $ ContainerFactorOrNormalDataNormal normalRes containerFactorOrNormalData
 
   normalConcat
     :: Semigroup a
