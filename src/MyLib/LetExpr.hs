@@ -5,7 +5,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
 
-module MyLib.LetExpr (LetExpr(..), LetBinding, Var, TrieLB, Printable,  letBindingBS, filterMapOrMap, foldlLetExpr, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, printableSetPrefix, printableSetSuffix, printable, printablePrefixed, printableSuffixed, printableInfixed, printableEnqueueFront, printableEnqueueBack, letBindingVarPrintable, letBindingValuePrintable, varPrintable, printableToList, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
+module MyLib.LetExpr (LetExpr(..), LetBinding, Var, TrieLB, Printable,  letBindingBS, filterMapOrMap, foldlLetExpr, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, printable, printablePrefixed, printableSuffixed, printableInfixed, printableEnqueueFront, printableEnqueueBack, letBindingVarPrintable, letBindingValuePrintable, letBindingValuePrintablePrefixed, letBindingValuePrintableSuffixed, letBindingValuePrintableInfixed, varPrintable, printableToList, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
 
   import Data.List.NonEmpty (NonEmpty(..), (<|))
   import qualified Data.List.NonEmpty as NE
@@ -68,24 +68,6 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var, TrieLB, Printable,  letBindi
 
   --------------------
 
-  printableSetPrefix
-    :: a
-    -> Printable a
-    -> Printable a
-  printableSetPrefix prefix (Printable front middle back) = PrintablePrefixed prefix front middle back
-  printableSetPrefix prefix (PrintablePrefixed _ front middle back) = PrintablePrefixed prefix front middle back
-  printableSetPrefix prefix (PrintableSuffixed suffix front middle back) = PrintableInfixed prefix suffix front middle back
-  printableSetPrefix prefix (PrintableInfixed _ suffix front middle back) = PrintableInfixed prefix suffix front middle back
-
-  printableSetSuffix
-    :: a
-    -> Printable a
-    -> Printable a
-  printableSetSuffix suffix (Printable front middle back) = PrintableSuffixed suffix front middle back
-  printableSetSuffix suffix (PrintablePrefixed prefix front middle back) = PrintableInfixed prefix suffix front middle back
-  printableSetSuffix suffix (PrintableSuffixed _ front middle back) = PrintableSuffixed suffix front middle back
-  printableSetSuffix suffix (PrintableInfixed prefix _ front middle back) = PrintableInfixed prefix suffix front middle back
-
   printable
     :: a
     -> Printable a
@@ -137,6 +119,25 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var, TrieLB, Printable,  letBindi
     :: LetBinding a
     -> Printable a
   letBindingValuePrintable (LetBinding _ value) = Printable [] value Q.empty
+
+  letBindingValuePrintablePrefixed
+    :: a
+    -> LetBinding a
+    -> Printable a
+  letBindingValuePrintablePrefixed prefix (LetBinding _ value) = PrintablePrefixed prefix [] value Q.empty
+
+  letBindingValuePrintableSuffixed
+    :: a
+    -> LetBinding a
+    -> Printable a
+  letBindingValuePrintableSuffixed suffix (LetBinding _ value) = PrintableSuffixed suffix [] value Q.empty
+
+  letBindingValuePrintableInfixed
+    :: a
+    -> a
+    -> LetBinding a
+    -> Printable a
+  letBindingValuePrintableInfixed prefix suffix (LetBinding _ value) = PrintableInfixed prefix suffix [] value Q.empty
 
   varPrintable
     :: Var

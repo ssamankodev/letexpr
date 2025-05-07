@@ -26,19 +26,15 @@ module MyLib.Print(invalidRebindMessage, exprRecInvalidRecursionMessage, letBind
     :: ContainerFactor Var Text
     -> Printable Text
   containerFactorRecVariableOriginalAndUnderline container = 
-    printableSetPrefix (repeatChar 4 ' ')
-    . printableSetSuffix "\n"
-    $ (fold1 . containerToList . first (fold1 . printableToList . varPrintable) $ containerFactorToContainer container)
-      `printableEnqueueFront` printable (containerFactorRecVariableUnderline container)
+    (fold1 . containerToList . first (fold1 . printableToList . varPrintable) $ containerFactorToContainer container)
+      `printableEnqueueFront` printableInfixed (repeatChar 4 ' ') "\n" (containerFactorRecVariableUnderline container)
 
   containerFactorOrNormalRecVariableOriginalAndUnderline
     :: ContainerFactorOrNormal Var Text
     -> Printable Text
   containerFactorOrNormalRecVariableOriginalAndUnderline container = 
-    printableSetPrefix (repeatChar 4 ' ')
-    . printableSetSuffix "\n"
-    $ (fold1 . containerToList . first (fold1 . printableToList . varPrintable) $ containerFactorOrNormalToContainer container)
-      `printableEnqueueFront` printable (containerFactorOrNormalRecVariableUnderline container)
+    (fold1 . containerToList . first (fold1 . printableToList . varPrintable) $ containerFactorOrNormalToContainer container)
+      `printableEnqueueFront` printableInfixed (repeatChar 4 ' ') "\n" (containerFactorOrNormalRecVariableUnderline container)
 
   containerFactorRecVariableUnderline
     :: ContainerFactor Var Text
@@ -87,8 +83,7 @@ module MyLib.Print(invalidRebindMessage, exprRecInvalidRecursionMessage, letBind
     "Variable '" <> fold1 (printableToList $ letBindingVarPrintable lb) <> "' was bound to the following definitions, in order of recency:"
     <| fmap (fold1
          . printableToList
-         . printableSetPrefix (repeatChar 4 ' ')
-         . letBindingValuePrintable)
+         . letBindingValuePrintablePrefixed (repeatChar 4 ' '))
          (letBindingNonEmptyToNonEmptyLetBinding lb)
 
   invalidRebindMessage
