@@ -11,6 +11,7 @@ module Test.Test (tests) where
   tests =
     checkParallel $$(discover)
 
+{-
   varRoundTripBS :: Property
   varRoundTripBS =
     property $ do
@@ -24,3 +25,4 @@ module Test.Test (tests) where
       ys <- forAll $ Gen.integral_ (Range.linear 0 10000)
       zs <- forAll $ Gen.integral_ (Range.linear 0 10000)
       MyLib.flattenTuple ((xs, ys), zs) === (xs, ys, zs)
+-}

@@ -3,6 +3,10 @@
 module Main (main) where
 
   import Test.Test
+  import Test.LetExpr
 
   main :: IO ()
-  main = tests >> pure ()
+  main = do
+    tests
+    testsLetExpr
+    pure ()
