@@ -5,7 +5,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
 
-module MyLib.LetExpr (LetExpr(..), LetBinding, Var, TrieLB, varToText, letBindingBS, filterMapOrMap, foldlLetExpr, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
+module MyLib.LetExpr (LetExpr(..), LetBinding, Var, TrieLB, varToText, letBindingBS, filterMapOrMap, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
 
   import Data.List.NonEmpty (NonEmpty(..), (<|))
   import qualified Data.List.NonEmpty as NE
@@ -126,6 +126,12 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var, TrieLB, varToText, letBindin
 
   ------------------
 
+  mapLetBinding
+    :: (Var -> a -> b)
+    -> LetBinding a
+    -> LetBinding b
+  mapLetBinding fn (LetBinding var value) = LetBinding var $ fn var value
+
   mapLetBindings
     :: (LetBinding a -> LetBinding b)
     -> LetExpr a c
@@ -203,16 +209,3 @@ module MyLib.LetExpr (LetExpr(..), LetBinding, Var, TrieLB, varToText, letBindin
     case eitherFilterMapOrMap filterFn mapFn nonEmpty of
       Left filteredNonEmpty -> Left filteredNonEmpty
       Right mappedNonEmpty -> Right $ LetBind mappedNonEmpty finalExpression
-
-  foldlLetExpr
-    :: (b -> a -> b)
-    -> b
-    -> LetExpr a c
-    -> b
-  foldlLetExpr fn accum (LetBind nonEmpty _) = foldl' fn accum $ fmap (\(LetBinding _ value) -> value) nonEmpty
-
-  mapLetBinding
-    :: (Var -> a -> b)
-    -> LetBinding a
-    -> LetBinding b
-  mapLetBinding fn (LetBinding var value) = LetBinding var $ fn var value
