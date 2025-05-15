@@ -1,20 +1,121 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module MyLib.Print(invalidRebindMessage, exprRecInvalidRecursionMessage, letBindingRebindsMessage) where
 
   import MyLib.LetExpr
   import MyLib.Container
-  import Data.Text(Text)
+  import Data.Text (Text)
   import qualified Data.Text as T
   import qualified Data.Text.Lazy as L
-  import Data.List.NonEmpty
+  import qualified Data.Text.Encoding as TE
+  import Data.List.NonEmpty as NE
   import Data.Bifunctor
   import Data.Foldable1
   import GHC.Int (Int64)
+  import Queue (Queue)
+  import qualified Queue as Q
 
 -- ------------------
 -- | Error Messages |
 -- ------------------
+
+  data Printable a
+    = Printable [a] a (Queue a)
+    | PrintablePrefixed a [a] a (Queue a)
+    | PrintableSuffixed a [a] a (Queue a)
+    | PrintableInfixed a a [a] a (Queue a)
+
+  instance Semigroup a => Semigroup (Printable a) where
+    (Printable front middle back) <> enqueueBack = Printable front middle $ back <> (Q.fromList . NE.toList $ printableToList enqueueBack)
+    (PrintablePrefixed prefix front middle back) <> enqueueBack =
+      let
+        prefixFn :: Semigroup a => a -> a
+        prefixFn = (prefix <>)
+      in
+      Printable (fmap prefixFn front) (prefixFn middle) (fmap prefixFn back <> (Q.fromList . NE.toList $ printableToList enqueueBack))
+    (PrintableSuffixed suffix front middle back) <> enqueueBack =
+      let
+        suffixFn :: Semigroup a => a -> a
+        suffixFn = (<> suffix)
+      in
+      Printable (fmap suffixFn front) (suffixFn middle) (fmap suffixFn back <> (Q.fromList . NE.toList $ printableToList enqueueBack))
+    (PrintableInfixed prefix suffix front middle back) <> enqueueBack =
+      let
+        infixFn :: Semigroup a => a -> a
+        infixFn x = prefix <> x <> suffix
+      in
+      Printable (fmap infixFn front) (infixFn middle) (fmap infixFn back <> (Q.fromList . NE.toList $ printableToList enqueueBack))
+
+  --------------------
+
+  printable
+    :: a
+    -> Printable a
+  printable value = Printable [] value Q.empty
+
+  printablePrefixed
+    :: a
+    -> a
+    -> Printable a
+  printablePrefixed prefix value = PrintablePrefixed prefix [] value Q.empty
+
+  printableSuffixed
+    :: a
+    -> a
+    -> Printable a
+  printableSuffixed suffix value = PrintableSuffixed suffix [] value Q.empty
+
+  printableInfixed
+    :: a
+    -> a
+    -> a
+    -> Printable a
+  printableInfixed prefix suffix value = PrintableInfixed prefix suffix [] value Q.empty
+
+  printableEnqueueFront
+    :: a
+    -> Printable a
+    -> Printable a
+  printableEnqueueFront value (Printable front middle back) = Printable (value : front) middle back
+  printableEnqueueFront value (PrintablePrefixed prefix front middle back) = PrintablePrefixed prefix (value : front) middle back
+  printableEnqueueFront value (PrintableSuffixed suffix front middle back) = PrintableSuffixed suffix (value : front) middle back
+  printableEnqueueFront value (PrintableInfixed prefix suffix front middle back) = PrintableInfixed prefix suffix (value : front) middle back
+
+  printableEnqueueBack
+    :: a
+    -> Printable a
+    -> Printable a
+  printableEnqueueBack value (Printable front middle back) = Printable front middle $ Q.enqueue value back
+  printableEnqueueBack value (PrintablePrefixed prefix front middle back) = PrintablePrefixed prefix front middle $ Q.enqueue value back
+  printableEnqueueBack value (PrintableSuffixed suffix front middle back) = PrintableSuffixed suffix front middle $ Q.enqueue value back
+  printableEnqueueBack value (PrintableInfixed prefix suffix front middle back) = PrintableInfixed prefix suffix front middle $ Q.enqueue value back
+
+  letBindingVarPrintable
+    :: LetBinding a
+    -> Printable Text
+  letBindingVarPrintable lb = printable . varToText . NE.head . letExprLetBindingValues $ letExpr (mapLetBinding const lb) lb
+
+  letBindingValuePrintable
+    :: LetBinding a
+    -> Printable a
+  letBindingValuePrintable lb = printable . NE.head . letExprLetBindingValues $ letExpr lb lb
+
+  varPrintable
+    :: Var
+    -> Printable Text
+  varPrintable var = printable $ varToText var
+
+  printableToList
+    :: Semigroup a
+    => Printable a
+    -> NonEmpty a
+  printableToList (Printable front middle back) = NE.prependList front $ middle :| Q.toList back
+  printableToList (PrintablePrefixed prefix front middle back) = fmap (prefix <>) . NE.prependList front $ middle :| Q.toList back
+  printableToList (PrintableSuffixed suffix front middle back) = fmap (<> suffix) . NE.prependList front $ middle :| Q.toList back
+  printableToList (PrintableInfixed prefix suffix front middle back) = fmap (\x -> prefix <> x <> suffix) . NE.prependList front $ middle :| Q.toList back
+
+  ------------
 
   repeatChar
     :: GHC.Int.Int64
@@ -83,7 +184,10 @@ module MyLib.Print(invalidRebindMessage, exprRecInvalidRecursionMessage, letBind
     "Variable '" <> fold1 (printableToList $ letBindingVarPrintable lb) <> "' was bound to the following definitions, in order of recency:"
     <| fmap (fold1
          . printableToList
-         . letBindingValuePrintablePrefixed (repeatChar 4 ' '))
+         . printablePrefixed (repeatChar 4 ' ')
+         . fold1
+         . printableToList
+         . letBindingValuePrintable)
          (letBindingNonEmptyToNonEmptyLetBinding lb)
 
   invalidRebindMessage
