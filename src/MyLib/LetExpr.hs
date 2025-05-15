@@ -5,14 +5,13 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingVia #-}
 
-module MyLib.LetExpr (LetExpr(..), LetBinding, Var, TrieLB, varToText, letBindingBS, filterMapOrMap, mapLetBinding, letExpr, prependLetExpr, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
+module MyLib.LetExpr (LetExpr(..), LetBinding, Var, TrieLB, varToText, letBindingBS, filterMapOrMap, letExpr, prependLetExpr, mapLetBinding, mapLetBindings, insertOrPrependTrieLB, insertOrPrependEitherTrieLB, emptyTrieLB, filterMapTrieLB, trieLBToLetBindings, matchTrieLB, letExprLetBindings, letExprLetBindingValues, letBindingEitherToEitherLetBinding, eitherLetBindingToLetBindingEither, letBindingTupleToTupleLetBinding, tupleLetBindingToLetBindingTuple, letBindingNonEmptyToNonEmptyLetBinding, nonEmptyLetBindingToLetBindingNonEmpty) where
 
   import Data.List.NonEmpty (NonEmpty(..), (<|))
   import qualified Data.List.NonEmpty as NE
   import Data.Bifunctor
   import Data.ByteString (ByteString)
   import qualified Data.ByteString as B
-  import Data.Foldable
   import Data.Trie (Trie)
   import qualified Data.Trie as Trie
   import Data.Text (Text)
